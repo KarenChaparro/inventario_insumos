@@ -30,7 +30,7 @@
     <!-- APPLICATION JAVASCRIPT -->
     <script>
         // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
-        const STORAGE_KEY = 'icv_cie_inventory_system_v3';
+        const STORAGE_KEY = 'icv_cie_inventory_system_v4';
 
         let defaultState = {
             currentUser: null, // {name, document, username, role: 'admin'|'user'}
@@ -38,7 +38,7 @@
             currentSection: 'hospitalarios', // 'hospitalarios' or 'comercializadora'
             currentTab: 'inventario', // 'inventario' | 'pedido' | 'seguimiento' | 'reportes'
             users: [
-                { name: 'Lindsay Velasco', username: 'Lindsayvelasco', document: '12345678', password: 'admin', role: 'admin' },
+                { name: 'Lindsay Velasco', username: 'Lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' },
                 { name: 'Usuario Regular ICV', username: 'usuarioicv', document: '87654321', password: 'user', role: 'user' }
             ],
             inventory: {
@@ -65,8 +65,8 @@
                 }
             },
             orders: [], // [{ id, location, section, userName, userDoc, date, time, items: [{code, name, orderedQty, deliveredQty, pendingQty}], status }]
-            notifications: [], // [{ id, message, location, section, user, date, time, read }]
-            cart: [] // Temporary cart for active order creation
+            notifications: [], // [{ id, orderId, message, location, section, user, date, time, read }]
+            cart: []
         };
 
         let state = loadState();
@@ -78,7 +78,7 @@
                     const parsed = JSON.parse(saved);
                     let mergedState = { ...defaultState, ...parsed };
                     if (!mergedState.users.some(u => u.username && u.username.toLowerCase() === 'lindsayvelasco')) {
-                        mergedState.users.unshift({ name: 'Lindsay Velasco', username: 'Lindsayvelasco', document: '12345678', password: 'admin', role: 'admin' });
+                        mergedState.users.unshift({ name: 'Lindsay Velasco', username: 'Lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' });
                     }
                     return mergedState;
                 } catch(e) {
@@ -95,6 +95,7 @@
         // --- TOAST NOTIFICATIONS ---
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
+            if(!container) return;
             const toast = document.createElement('div');
             const bgColors = {
                 success: 'bg-emerald-600 text-white',
@@ -163,7 +164,7 @@
             return `
                 <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Usuario (ej. Lindsayvelasco) o Documento</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Usuario (Nombre de usuraio) o Documento</label>
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user-shield"></i></span>
                             <input type="text" id="login-id" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Lindsayvelasco o Documento">
@@ -180,7 +181,7 @@
                         Entrar al Sistema
                     </button>
                     <div class="text-xs text-slate-500 text-center mt-4">
-                        Admin: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">Lindsayvelasco</code> / Pass: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">admin</code>
+                        Admin: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">Lindsayvelasco</code> / Pass: <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">admin</code>
                     </div>
                 </form>
             `;
@@ -557,12 +558,12 @@
                                     </td>
                                     ${isAdmin ? `
                                     <td class="py-4 px-6 text-right">
-                                        <div class="flex items-center justify-end gap-1.5">
-                                            <button onclick="openEditProductModal('${item.code}')" title="Modificar Insumo" class="p-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg transition">
-                                                <i class="fa-solid fa-pen text-xs"></i>
+                                        <div class="inline-flex items-center bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200">
+                                            <button onclick="openEditProductModal('${item.code}')" title="Modificar Insumo" class="px-3 py-1.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                                                <i class="fa-solid fa-pen text-xs"></i> Modificar
                                             </button>
-                                            <button onclick="deleteProduct('${item.code}')" title="Eliminar Insumo" class="p-2 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-lg transition">
-                                                <i class="fa-solid fa-trash text-xs"></i>
+                                            <button onclick="deleteProduct('${item.code}')" title="Eliminar Insumo" class="px-3 py-1.5 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                                                <i class="fa-solid fa-trash text-xs"></i> Eliminar
                                             </button>
                                         </div>
                                     </td>
