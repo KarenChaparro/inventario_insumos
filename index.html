@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Integral de Inventarios ICV & CIE</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="flex-1 flex flex-col">
+        <!-- Rendered dynamically via JS -->
+    </div>
+
+    <!-- MODALS CONTAINER -->
+    <div id="modal-container"></div>
+
+    <!-- APPLICATION JAVASCRIPT -->
+    <script>
+        // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
+        const STORAGE_KEY = 'icv_cie_inventory_system_v1';
+
+        let defaultState = {
+            currentUser: null, // {name, document, role: 'admin'|'user'}
+            currentLocation: 'ICV', // 'ICV' or 'CIE'
+            currentSection: 'hospitalarios', // 'hospitalarios' or 'comercializadora'
+            currentTab: 'inventario', // 'inventario' | 'pedido' | 'seguimiento' | 'reportes'
+            users: [
+                { name: 'Administrador Maestro', document: '12345678', password: 'admin', role: 'admin' },
+                { name: 'Usuario Regular ICV', document: '87654321', password: 'user', role: 'user' }
+            ],
+            inventory: {
+                ICV: {
+                    hospitalarios: [
+                        { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
+                        { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
+                        { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
+                    ],
+                    comercializadora: [
+                        { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
+                        { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
+                    ]
+                },
+                CIE: {
+                    hospitalarios: [
+                        { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
+                        { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
+                    ],
+                    comercializadora: [
+                        { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
+                        { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
+                    ]
+                }
+            },
+            orders: [], // [{ id, location, section, userName, userDoc, date, time, items: [{code, name, orderedQty, deliveredQty, pendingQty}], status }]
+            notifications: [], // [{ id, message, location, section, user, date, time, read }]
+            cart: [] // Temporary cart for active order creation
+        };
+
+        let state = loadState();
+
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Ensure all fields exist
+                    return { ...defaultState, ...parsed };
+                } catch(e) {
+                    console.error("Error loading state", e);
+                }
+            }
+            return defaultState;
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-rose-600 text-white',
+                info: 'bg-blue-600 text-white'
+            };
+            toast.className = `px-4 py-3 rounded-xl shadow-lg font-medium text-sm flex items-center gap-3 transition transform translate-y-2 opacity-0 pointer-events-auto ${bgColors[type] || bgColors.success}`;
+            
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+
+            toast.innerHTML = `<i class="fa-solid ${icons[type]} text-lg"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // --- RENDER ROUTER ---
+        function render() {
+            const app = document.getElementById('app');
+            if (!state.currentUser) {
+                app.innerHTML = renderAuthScreen();
+            } else {
+                app.innerHTML = renderMainDashboard();
+            }
+        }
+
+        // --- AUTH SCREEN ---
+        let authMode = 'login'; // 'login' or 'register'
+
+        function renderAuthScreen() {
+            return `
+                <div class="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+                    <div class="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl w-full max-w-md p-8 border border-white/20">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white text-2xl shadow-lg mb-4">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <h1 class="text-2xl font-bold text-slate-900">ICV & CIE Insumos</h1>
+                            <p class="text-slate-500 text-sm mt-1">Sistema de Control de Inventarios y Pedidos</p>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="flex rounded-xl bg-slate-100 p-1 mb-6">
+                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Iniciar Sesión</button>
+                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Registrarse</button>
+                        </div>
+
+                        ${authMode === 'login' ? renderLoginForm() : renderRegisterForm()}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLoginForm() {
+            return `
+                <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Documento de Identidad</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-id-card"></i></span>
+                            <input type="text" id="login-doc" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Ej. 12345678">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
+                            <input type="password" id="login-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="••••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                        Entrar al Sistema
+                    </button>
+                    <div class="text-xs text-slate-500 text-center mt-4">
+                        Admin por defecto: Doc: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">12345678</code> / Pass: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">admin</code>
+                    </div>
+                </form>
+            `;
+        }
+
+        function renderRegisterForm() {
+            return `
+                <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre Completo</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user"></i></span>
+                            <input type="text" id="reg-name" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Tu Nombre">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Documento de Identidad</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-id-card"></i></span>
+                            <input type="text" id="reg-doc" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Ej. 10987654">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
+                            <input type="password" id="reg-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="••••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
+                        Registrarme
+                    </button>
+                </form>
+            `;
+        }
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            render();
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const doc = document.getElementById('login-doc').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+
+            const found = state.users.find(u => u.document === doc && u.password === pass);
+            if (found) {
+                state.currentUser = found;
+                saveState();
+                showToast(`¡Bienvenido de nuevo, ${found.name}!`);
+                render();
+            } else {
+                showToast('Documento o contraseña incorrectos.', 'error');
+            }
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('reg-name').value.trim();
+            const doc = document.getElementById('reg-doc').value.trim();
+            const pass = document.getElementById('reg-pass').value.trim();
+
+            if (state.users.some(u => u.document === doc)) {
+                showToast('Ya existe un usuario registrado con este documento.', 'error');
+                return;
+            }
+
+            const newUser = { name, document: doc, password: pass, role: 'user' };
+            state.users.push(newUser);
+            state.currentUser = newUser;
+            saveState();
+            showToast('¡Registro exitoso! Sesión iniciada.');
+            render();
+        }
+
+        function logout() {
+            state.currentUser = null;
+            saveState();
+            showToast('Sesión cerrada correctamente.', 'info');
+            render();
+        }
+
+        // --- MAIN DASHBOARD ---
+        function renderMainDashboard() {
+            const isAdmin = state.currentUser.role === 'admin';
+            const unreadNotifs = state.notifications.filter(n => !n.read).length;
+
+            return `
+                <!-- Top Navbar -->
+                <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-600/20">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <div>
+                                <h1 class="font-bold text-slate-800 text-base leading-tight">ICV & CIE Insumos</h1>
+                                <span class="text-xs text-slate-500 font-medium">Gestión Multisede</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <!-- User Badge -->
+                            <div class="hidden sm:flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl">
+                                <div class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-xs">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <div class="text-xs">
+                                    <p class="font-bold text-slate-700">${state.currentUser.name}</p>
+                                    <p class="text-slate-500 uppercase tracking-wider text-[10px]">${isAdmin ? 'Administrador' : 'Usuario Normal'}</p>
+                                </div>
+                            </div>
+
+                            <!-- Logout Button -->
+                            <button onclick="logout()" title="Cerrar Sesión" class="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 transition">
+                                <i class="fa-solid fa-power-off"></i>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Sub-Header Sede & Seccion Bar -->
+                <div class="bg-indigo-900 text-white shadow-inner">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <!-- Sede Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sede:</span>
+                            <button onclick="switchLocation('ICV')" class="px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${state.currentLocation === 'ICV' ? 'bg-white text-indigo-950' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-hospital mr-1.5"></i> Sede ICV
+                            </button>
+                            <button onclick="switchLocation('CIE')" class="px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${state.currentLocation === 'CIE' ? 'bg-white text-indigo-950' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-building-shield mr-1.5"></i> Sede CIE
+                            </button>
+                        </div>
+
+                        <!-- Seccion Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sección:</span>
+                            <button onclick="switchSection('hospitalarios')" class="px-3.5 py-2 rounded-xl text-xs font-semibold transition ${state.currentSection === 'hospitalarios' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-800/60 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-kit-medical mr-1"></i> Productos Hospitalarios
+                            </button>
+                            <button onclick="switchSection('comercializadora')" class="px-3.5 py-2 rounded-xl text-xs font-semibold transition ${state.currentSection === 'comercializadora' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-800/60 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-store mr-1"></i> Comercializadora
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="bg-white border-b border-slate-200 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto">
+                        <button onclick="switchTab('inventario')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-boxes-column"></i> Inventario Actual
+                        </button>
+                        <button onclick="switchTab('pedido')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-cart-plus"></i> Realizar Pedido
+                        </button>
+                        <button onclick="switchTab('seguimiento')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'seguimiento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-clipboard-check"></i> Recepción y Pendientes
+                        </button>
+                        ${isAdmin ? `
+                        <button onclick="switchTab('reportes')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition relative ${state.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-chart-line"></i> Panel Admin & Reportes
+                            ${unreadNotifs > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-rose-600 text-white rounded-full text-[10px]">${unreadNotifs}</span>` : ''}
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Content Body -->
+                <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="p-3 bg-indigo-600 text-white rounded-xl">
+                                <i class="fa-solid fa-location-dot"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800">Vista Actual: Sede <span class="text-indigo-600">${state.currentLocation}</span> / Sección <span class="text-indigo-600 uppercase">${state.currentSection}</span></h3>
+                                <p class="text-xs text-slate-500">Los datos mostrados corresponden exclusivamente a esta selección.</p>
+                            </div>
+                        </div>
+                        <div class="text-xs font-semibold bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 shadow-sm">
+                            Usuario: ${state.currentUser.name} (${state.currentUser.document})
+                        </div>
+                    </div>
+
+                    ${renderTabContent()}
+                </main>
+            `;
+        }
+
+        function switchLocation(loc) {
+            state.currentLocation = loc;
+            saveState();
+            render();
+        }
+
+        function switchSection(sec) {
+            state.currentSection = sec;
+            saveState();
+            render();
+        }
+
+        function switchTab(tab) {
+            state.currentTab = tab;
+            if(tab === 'reportes' && state.currentUser.role === 'admin') {
+                // Mark notifications as read when entering reports/admin panel
+                state.notifications.forEach(n => n.read = true);
+                saveState();
+            }
+            render();
+        }
+
+        function renderTabContent() {
+            switch(state.currentTab) {
+                case 'inventario': return renderInventoryTab();
+                case 'pedido': return renderOrderTab();
+                case 'seguimiento': return renderTrackingTab();
+                case 'reportes': return renderReportsTab();
+                default: return renderInventoryTab();
+            }
+        }
+
+        // --- TAB 1: INVENTARIO ---
+        let inventorySearchQuery = '';
+
+        function renderInventoryTab() {
+            const items = state.inventory[state.currentLocation][state.currentSection];
+            const filtered = items.filter(i => 
+                i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+            );
+            const isAdmin = state.currentUser.role === 'admin';
+
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <!-- Header Actions -->
+                    <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                        <div class="relative flex-1 max-w-md">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" oninput="inventorySearchQuery = this.value; renderInventoryTableOnly();" value="${inventorySearchQuery}" placeholder="Buscar por código o nombre de insumo..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition">
+                        </div>
+                        ${isAdmin ? `
+                        <button onclick="openAddProductModal()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-plus"></i> Agregar Nuevo Insumo
+                        </button>
+                        ` : `
+                        <div class="text-xs text-slate-500 italic flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-indigo-600"></i> Solo el administrador puede agregar nuevos productos.
+                        </div>
+                        `}
+                    </div>
+
+                    <!-- Table -->
+                    <div class="overflow-x-auto" id="inventory-table-container">
+                        ${renderInventoryTableHTML(filtered)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderInventoryTableOnly() {
+            const container = document.getElementById('inventory-table-container');
+            if(container) {
+                const items = state.inventory[state.currentLocation][state.currentSection];
+                const filtered = items.filter(i => 
+                    i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                    i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+                );
+                container.innerHTML = renderInventoryTableHTML(filtered);
+            }
+        }
+
+        function renderInventoryTableHTML(items) {
+            if (items.length === 0) {
+                return `
+                    <div class="py-12 text-center text-slate-400">
+                        <i class="fa-solid fa-box-open text-4xl mb-3"></i>
+                        <p class="text-sm font-medium">No se encontraron insumos registrados en esta sección.</p>
+                    </div>
+                `;
+            }
+
+            return `
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase font-semibold text-slate-500 tracking-wider">
+                            <th class="py-3.5 px-6">Código</th>
+                            <th class="py-3.5 px-6">Nombre del Insumo</th>
+                            <th class="py-3.5 px-6">Cantidad Disponible</th>
+                            <th class="py-3.5 px-6">Estado de Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        ${items.map(item => {
+                            let badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                            let statusText = 'Stock Óptimo';
+                            if (item.quantity <= item.minStock) {
+                                badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                statusText = 'Stock Bajo';
+                            }
+                            return `
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="py-4 px-6 font-mono font-semibold text-indigo-600">${item.code}</td>
+                                    <td class="py-4 px-6 font-medium text-slate-800">${item.name}</td>
+                                    <td class="py-4 px-6 font-bold text-slate-900">${item.quantity} unidades</td>
+                                    <td class="py-4 px-6">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${badgeColor}">
+                                            ${statusText}
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function openAddProductModal() {
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg text-slate-800">Agregar Nuevo Insumo</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">Se agregará a la Sede <span class="font-bold text-indigo-600">${state.currentLocation}</span> y sección <span class="font-bold text-indigo-600 uppercase">${state.currentSection}</span>.</p>
+                        
+                        <form onsubmit="handleAddProduct(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Código del Insumo</label>
+                                <input type="text" id="new-code" required placeholder="Ej. HOS-004 o COM-003" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre del Insumo</label>
+                                <input type="text" id="new-name" required placeholder="Ej. Jeringas 5ml" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cantidad Inicial</label>
+                                <input type="number" id="new-qty" min="0" required placeholder="Ej. 100" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Stock Mínimo (Alerta)</label>
+                                <input type="number" id="new-min" min="0" required placeholder="Ej. 20" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div class="flex items-center justify-end gap-3 mt-6">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition">Guardar Insumo</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleAddProduct(e) {
+            e.preventDefault();
+            const code = document.getElementById('new-code').value.trim().toUpperCase();
+            const name = document.getElementById('new-name').value.trim();
+            const quantity = parseInt(document.getElementById('new-qty').value);
+            const minStock = parseInt(document.getElementById('new-min').value);
+
+            const list = state.inventory[state.currentLocation][state.currentSection];
+            if (list.some(i => i.code === code)) {
+                showToast('Ya existe un insumo con este código en la sección.', 'error');
+                return;
+            }
+
+            list.push({ code, name, quantity, minStock });
+            saveState();
+            closeModal();
+            showToast('¡Insumo agregado con éxito a la base de datos!');
+            render();
+        }
+
+        function closeModal() {
+            document.getElementById('modal-container').innerHTML = '';
+        }
+
+        // --- TAB 2: REALIZAR PEDIDO ---
+        let orderSearchQuery = '';
+
+        function renderOrderTab() {
+            const items = state.inventory[state.currentLocation][state.currentSection];
+            const filtered = items.filter(i => 
+                i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+            );
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Products Selection Column -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800 text-base">Seleccionar Insumos para Pedido</h3>
+                            <span class="text-xs text-slate-500">Sede: ${state.currentLocation} / ${state.currentSection}</span>
+                        </div>
+                        <div class="relative mb-4">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" oninput="orderSearchQuery = this.value; renderOrderProductsOnly();" value="${orderSearchQuery}" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 transition">
+                        </div>
+
+                        <div class="overflow-x-auto max-h-[450px] overflow-y-auto" id="order-products-container">
+                            ${renderOrderProductsHTML(filtered)}
+                        </div>
+                    </div>
+
+                    <!-- Cart / Active Order Column -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-cart-shopping text-indigo-600"></i> Carrito de Pedido
+                                </h3>
+                                <span class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-lg">${state.cart.length} ítems</span>
+                            </div>
+
+                            <div class="space-y-3 max-h-[300px] overflow-y-auto mb-4" id="cart-items-list">
+                                ${state.cart.length === 0 ? `
+                                    <div class="py-12 text-center text-slate-400">
+                                        <i class="fa-solid fa-basket-shopping text-3xl mb-2"></i>
+                                        <p class="text-xs">No hay insumos agregados al pedido actual.</p>
+                                    </div>
+                                ` : state.cart.map((item, idx) => `
+                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                                        <div>
+                                            <p class="text-xs font-mono font-bold text-indigo-600">${item.code}</p>
+                                            <p class="text-xs font-semibold text-slate-800 line-clamp-1">${item.name}</p>
+                                            <p class="text-xs text-slate-500 font-medium mt-0.5">Cantidad: <span class="font-bold text-slate-800">${item.qty}</span></p>
+                                        </div>
+                                        <button onclick="removeFromCart(${idx})" class="text-slate-400 hover:text-rose-600 p-1.5"><i class="fa-solid fa-trash text-xs"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-4">
+                            <button onclick="submitOrder()" ${state.cart.length === 0 ? 'disabled' : ''} class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-paper-plane"></i> Realizar Pedido Oficial
+                            </button>
+                            <p class="text-[10px] text-slate-400 text-center mt-2">Se registrará automáticamente tu usuario, fecha y hora.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOrderProductsOnly() {
+            const container = document.getElementById('order-products-container');
+            if(container) {
+                const items = state.inventory[state.currentLocation][state.currentSection];
+                const filtered = items.filter(i => 
+                    i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                    i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+                );
+                container.innerHTML = renderOrderProductsHTML(filtered);
+            }
+        }
+
+        function renderOrderProductsHTML(items) {
+            if (items.length === 0) {
+                return `<div class="py-8 text-center text-slate-400 text-xs">No hay insumos coincidentes.</div>`;
+            }
+
+            return `
+                <div class="space-y-3">
+                    ${items.map(item => `
+                        <div class="p-3.5 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl flex items-center justify-between gap-4 transition">
+                            <div>
+                                <span class="text-xs font-mono font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">${item.code}</span>
+                                <h4 class="font-semibold text-slate-800 text-sm mt-1">${item.name}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">Disponible en inventario: <span class="font-bold text-slate-700">${item.quantity}</span></p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="qty-${item.code}" min="1" value="1" class="w-20 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-center focus:outline-none focus:border-indigo-600">
+                                <button onclick="addToCart('${item.code}', '${item.name.replace(/'/g, "\\'")}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function addToCart(code, name) {
+            const qtyInput = document.getElementById(`qty-${code}`);
+            const qty = parseInt(qtyInput.value);
+            if (isNaN(qty) || qty <= 0) {
+                showToast('Por favor ingresa una cantidad válida.', 'error');
+                return;
+            }
+
+            const existing = state.cart.find(i => i.code === code);
+            if (existing) {
+                existing.qty += qty;
+            } else {
+                state.cart.push({ code, name, qty });
+            }
+            showToast(`Insumo ${code} añadido al carrito.`);
+            render();
+        }
+
+        function removeFromCart(idx) {
+            state.cart.splice(idx, 1);
+            render();
+        }
+
+        function submitOrder() {
+            if (state.cart.length === 0) return;
+
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+
+            const orderItems = state.cart.map(i => ({
+                code: i.code,
+                name: i.name,
+                orderedQty: i.qty,
+                deliveredQty: 0,
+                pendingQty: i.qty
+            }));
+
+            const newOrder = {
+                id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
+                location: state.currentLocation,
+                section: state.currentSection,
+                userName: state.currentUser.name,
+                userDoc: state.currentUser.document,
+                date: dateStr,
+                time: timeStr,
+                items: orderItems,
+                status: 'Pendiente'
+            };
+
+            state.orders.unshift(newOrder);
+
+            // Add notification for admin
+            state.notifications.unshift({
+                id: 'NOTIF-' + Date.now(),
+                message: `${state.currentUser.name} realizó un pedido (${newOrder.id}) en Sede ${state.currentLocation} / ${state.currentSection}.`,
+                location: state.currentLocation,
+                section: state.currentSection,
+                user: state.currentUser.name,
+                date: dateStr,
+                time: timeStr,
+                read: false
+            });
+
+            state.cart = [];
+            saveState();
+            showToast('¡Pedido realizado con éxito y notificación enviada al administrador!');
+            switchTab('seguimiento');
+        }
+
+        // --- TAB 3: SEGUIMIENTO Y RECEPCIÓN ---
+        function renderTrackingTab() {
+            // Filter orders relevant to current location & section, or all if admin
+            const isAdmin = state.currentUser.role === 'admin';
+            const orders = isAdmin ? state.orders : state.orders.filter(o => o.userDoc === state.currentUser.document);
+
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-lg">Seguimiento de Pedidos y Recepción de Insumos</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Controla las entregas parciales, saldos pendientes y recepciones posteriores.</p>
+                        </div>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 font-semibold px-3 py-1.5 rounded-xl border border-indigo-100">${orders.length} pedidos registrados</span>
+                    </div>
+
+                    ${orders.length === 0 ? `
+                        <div class="py-16 text-center text-slate-400">
+                            <i class="fa-solid fa-clipboard-list text-4xl mb-3"></i>
+                            <p class="text-sm font-medium">No hay pedidos registrados actualmente.</p>
+                        </div>
+                    ` : `
+                        <div class="space-y-6">
+                            ${orders.map(order => {
+                                let statusBadge = 'bg-amber-50 text-amber-700 border-amber-200';
+                                if (order.status === 'Completado') statusBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                if (order.status === 'Parcial') statusBadge = 'bg-blue-50 text-blue-700 border-blue-200';
+
+                                return `
+                                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 hover:bg-slate-50 transition">
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+                                            <div>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="font-mono font-bold text-indigo-600 text-base">${order.id}</span>
+                                                    <span class="px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusBadge}">${order.status}</span>
+                                                    <span class="text-xs bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-md font-medium">Sede: ${order.location} (${order.section})</span>
+                                                </div>
+                                                <p class="text-xs text-slate-500 mt-1">Solicitado por: <span class="font-semibold text-slate-700">${order.userName}</span> (Doc: ${order.userDoc}) el ${order.date} a las ${order.time}</p>
+                                            </div>
+                                            ${order.status !== 'Completado' ? `
+                                            <button onclick="openReceptionModal('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5 self-start sm:self-auto">
+                                                <i class="fa-solid fa-truck-ramp-box"></i> Registrar Llegada / Pendientes
+                                            </button>
+                                            ` : ''}
+                                        </div>
+
+                                        <div class="mt-4 overflow-x-auto">
+                                            <table class="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr class="text-slate-400 uppercase font-semibold border-b border-slate-200">
+                                                        <th class="py-2 px-3">Código</th>
+                                                        <th class="py-2 px-3">Insumo</th>
+                                                        <th class="py-2 px-3">Cantidad Pedida</th>
+                                                        <th class="py-2 px-3">Llegaron</th>
+                                                        <th class="py-2 px-3">Pendientes</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                                    ${order.items.map(item => `
+                                                        <tr>
+                                                            <td class="py-2.5 px-3 font-mono text-indigo-600">${item.code}</td>
+                                                            <td class="py-2.5 px-3 text-slate-900">${item.name}</td>
+                                                            <td class="py-2.5 px-3 font-bold">${item.orderedQty}</td>
+                                                            <td class="py-2.5 px-3 text-emerald-600 font-bold">${item.deliveredQty}</td>
+                                                            <td class="py-2.5 px-3 text-rose-600 font-bold">${item.pendingQty}</td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function openReceptionModal(orderId) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Registrar Recepción - ${order.id}</h3>
+                                <p class="text-xs text-slate-500">Ingresa las cantidades que acaban de llegar para actualizar el inventario y pendientes.</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+
+                        <form onsubmit="handleSaveReception(event, '${order.id}')" class="space-y-4">
+                            <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                                ${order.items.map((item, idx) => `
+                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div>
+                                                <span class="font-mono text-xs font-bold text-indigo-600">${item.code}</span>
+                                                <h4 class="text-xs font-semibold text-slate-800">${item.name}</h4>
+                                            </div>
+                                            <span class="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">Pendiente: ${item.pendingQty}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label class="text-xs text-slate-500 font-medium">Llegaron ahora:</label>
+                                            <input type="number" min="0" max="${item.pendingQty}" id="arrived-${idx}" value="0" class="w-24 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-600">
+                                            <span class="text-[10px] text-slate-400">(Máx. ${item.pendingQty})</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition">Actualizar Recepción e Inventario</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleSaveReception(e, orderId) {
+            e.preventDefault();
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            let allCompleted = true;
+
+            order.items.forEach((item, idx) => {
+                const arrivedInput = document.getElementById(`arrived-${idx}`);
+                const arrivedNow = parseInt(arrivedInput.value) || 0;
+
+                if (arrivedNow > 0) {
+                    item.deliveredQty += arrivedNow;
+                    item.pendingQty -= arrivedNow;
+
+                    // Also automatically update the actual inventory stock in that location/section!
+                    const invItem = state.inventory[order.location][order.section].find(i => i.code === item.code);
+                    if (invItem) {
+                        invItem.quantity += arrivedNow;
+                    }
+                }
+
+                if (item.pendingQty > 0) {
+                    allCompleted = false;
+                }
+            });
+
+            order.status = allCompleted ? 'Completado' : 'Parcial';
+
+            saveState();
+            closeModal();
+            showToast('¡Recepción registrada y stock actualizado con éxito!');
+            render();
+        }
+
+        // --- TAB 4: PANEL ADMIN & REPORTES ---
+        function renderReportsTab() {
+            // Calculate monthly & annual analytics
+            const orders = state.orders;
+
+            // Group by Month (YYYY-MM)
+            const monthlyStats = {};
+            let totalRequestedAllTime = 0;
+
+            orders.forEach(ord => {
+                const monthKey = ord.date.substring(0, 7); // YYYY-MM
+                if (!monthlyStats[monthKey]) {
+                    monthlyStats[monthKey] = { totalOrders: 0, totalItems: 0 };
+                }
+                monthlyStats[monthKey].totalOrders += 1;
+                ord.items.forEach(it => {
+                    monthlyStats[monthKey].totalItems += it.orderedQty;
+                    totalRequestedAllTime += it.orderedQty;
+                });
+            });
+
+            const monthsCount = Object.keys(monthlyStats).length || 1;
+            const monthlyAverage = Math.round(totalRequestedAllTime / monthsCount);
+
+            // Annual total (Current Year YYYY)
+            const currentYear = new Date().getFullYear().toString();
+            let annualTotal = 0;
+            Object.keys(monthlyStats).forEach(mk => {
+                if (mk.startsWith(currentYear)) {
+                    annualTotal += monthlyStats[mk].totalItems;
+                }
+            });
+
+            return `
+                <div class="space-y-6">
+                    <!-- Analytics Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+                            <div class="p-4 rounded-2xl bg-indigo-50 text-indigo-600 text-xl font-bold">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Total Solicitado este Año (${currentYear})</p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${annualTotal} <span class="text-xs font-medium text-slate-500">insumos</span></h4>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+                            <div class="p-4 rounded-2xl bg-emerald-50 text-emerald-600 text-xl font-bold">
+                                <i class="fa-solid fa-chart-pie"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Promedio Mensual de Pedidos</p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${monthlyAverage} <span class="text-xs font-medium text-slate-500">insumos/mes</span></h4>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+                            <div class="p-4 rounded-2xl bg-blue-50 text-blue-600 text-xl font-bold">
+                                <i class="fa-solid fa-file-invoice"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Total Pedidos Realizados</p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${orders.length} <span class="text-xs font-medium text-slate-500">órdenes</span></h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notifications & Activity Log -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Notifications -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-bell text-indigo-600"></i> Notificaciones de Pedidos Recientes
+                                </h3>
+                                <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-semibold">${state.notifications.length} eventos</span>
+                            </div>
+
+                            <div class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                                ${state.notifications.length === 0 ? `
+                                    <div class="py-12 text-center text-slate-400 text-xs">No hay notificaciones recientes.</div>
+                                ` : state.notifications.map(notif => `
+                                    <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                                            <i class="fa-solid fa-circle-exclamation text-xs"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="text-xs text-slate-800 font-medium">${notif.message}</p>
+                                            <p class="text-[10px] text-slate-400 mt-1">${notif.date} a las ${notif.time}</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Monthly Breakdown Table -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-table-cells text-indigo-600"></i> Relacionado Mensual de Insumos Solicitados
+                                </h3>
+                            </div>
+
+                            <div class="overflow-x-auto max-h-[350px] overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase font-semibold">
+                                            <th class="py-3 px-4">Mes (AÑO-MES)</th>
+                                            <th class="py-3 px-4">Total Órdenes</th>
+                                            <th class="py-3 px-4">Insumos Solicitados</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                        ${Object.keys(monthlyStats).length === 0 ? `
+                                            <tr><td colspan="3" class="py-8 text-center text-slate-400">Sin registros mensuales aún.</td></tr>
+                                        ` : Object.keys(monthlyStats).sort().reverse().map(mk => `
+                                            <tr>
+                                                <td class="py-3 px-4 font-mono font-bold text-indigo-600">${mk}</td>
+                                                <td class="py-3 px-4">${monthlyStats[mk].totalOrders} órdenes</td>
+                                                <td class="py-3 px-4 font-bold text-slate-900">${monthlyStats[mk].totalItems} unidades</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- INIT ON LOAD ---
+        window.onload = function() {
+            render();
+        }
+    </script>
+</body>
+</html>
