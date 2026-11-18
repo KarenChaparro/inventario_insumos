@@ -27,7 +27,7 @@
 
     <script>
         // --- BASE DE DATOS Y ESTADO ---
-        let db = JSON.parse(localStorage.getItem('icv_cie_db_v3')) || {
+        let db = JSON.parse(localStorage.getItem('icv_cie_db_v4')) || {
             users: [
                 { name: 'Lindsay Velasco', doc: '27984352', pass: 'admin', role: 'admin' }
             ],
@@ -61,7 +61,7 @@
         };
 
         function saveDB() {
-            localStorage.setItem('icv_cie_db_v3', JSON.stringify(db));
+            localStorage.setItem('icv_cie_db_v4', JSON.stringify(db));
         }
 
         window.onload = function() {
@@ -188,15 +188,15 @@
             render();
         }
 
-        // --- DASHBOARD PRINCIPAL ---
+        // --- DASHBOARD PRINCIPAL CON DISEÑO ORIGINAL CENTRADO ---
         function renderDashboard() {
             const isAdmin = db.currentUser.role === 'admin';
 
             return `
                 <!-- Navbar Superior -->
-                <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
+                <header class="bg-white border-b border-slate-200 px-8 py-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
                     <div class="flex items-center space-x-3">
-                        <div class="bg-indigo-600 text-white p-2.5 rounded-xl font-bold"><i class="fa-solid fa-boxes-stacked"></i></div>
+                        <div class="bg-indigo-600 text-white p-2.5 rounded-xl font-bold shadow-md shadow-indigo-600/20"><i class="fa-solid fa-boxes-stacked"></i></div>
                         <div>
                             <h2 class="font-bold text-slate-900 text-base">ICV & CIE Insumos</h2>
                             <p class="text-xs text-slate-500">Gestión Multisede</p>
@@ -204,57 +204,57 @@
                     </div>
 
                     <div class="flex items-center space-x-3">
-                        ${isAdmin ? `<button onclick="openChangePasswordModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"><i class="fa-solid fa-key mr-1.5"></i> Cambiar Contraseña</button>` : ''}
-                        <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                        ${isAdmin ? `<button onclick="openChangePasswordModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center"><i class="fa-solid fa-key mr-1.5"></i> Cambiar Contraseña</button>` : ''}
+                        <div class="flex items-center space-x-2.5 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200">
                             <i class="fa-solid fa-user-shield text-indigo-600"></i>
                             <div class="text-xs">
                                 <p class="font-bold text-slate-800">${db.currentUser.name}</p>
-                                <p class="text-[10px] text-slate-500 uppercase">${isAdmin ? 'Administrador' : 'Usuario'}</p>
+                                <p class="text-[10px] text-slate-500 uppercase font-semibold">${isAdmin ? 'Administrador' : 'Usuario'}</p>
                             </div>
                         </div>
-                        <button onclick="logout()" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition" title="Cerrar Sesión"><i class="fa-solid fa-power-off"></i></button>
+                        <button onclick="logout()" class="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition shadow-sm" title="Cerrar Sesión"><i class="fa-solid fa-power-off"></i></button>
                     </div>
                 </header>
 
-                <!-- Barra de Sede y Sección -->
-                <div class="bg-indigo-900 text-white px-6 py-3 flex flex-wrap justify-between items-center gap-4 shadow">
-                    <div class="flex items-center space-x-3">
+                <!-- Barra de Sede y Sección (Diseño Original Centrado) -->
+                <div class="bg-indigo-900 text-white px-8 py-3.5 flex flex-wrap justify-between items-center gap-4 shadow-md">
+                    <div class="flex items-center space-x-4">
                         <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SEDE:</span>
                         <div class="flex space-x-2">
-                            <button onclick="setSede('ICV')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition ${db.currentSedetab === 'ICV' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede ICV</button>
-                            <button onclick="setSede('CIE')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition ${db.currentSedetab === 'CIE' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede CIE</button>
+                            <button onclick="setSede('ICV')" class="px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm ${db.currentSedetab === 'ICV' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede ICV</button>
+                            <button onclick="setSede('CIE')" class="px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm ${db.currentSedetab === 'CIE' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede CIE</button>
                         </div>
                     </div>
 
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-4">
                         <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SECCIÓN:</span>
                         <div class="flex space-x-2">
-                            <button onclick="setSection('hospitalarios')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${db.currentSection === 'hospitalarios' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-hospital mr-1"></i> Productos Hospitalarios</button>
-                            <button onclick="setSection('comercializadora')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${db.currentSection === 'comercializadora' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-store mr-1"></i> Comercializadora</button>
+                            <button onclick="setSection('hospitalarios')" class="px-4 py-2 rounded-xl text-xs font-semibold transition shadow-sm ${db.currentSection === 'hospitalarios' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-hospital mr-1.5"></i> Productos Hospitalarios</button>
+                            <button onclick="setSection('comercializadora')" class="px-4 py-2 rounded-xl text-xs font-semibold transition shadow-sm ${db.currentSection === 'comercializadora' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-store mr-1.5"></i> Comercializadora</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Pestañas Principales (Navbar Interna) -->
-                <div class="bg-white border-b border-slate-200 px-6 flex space-x-6">
-                    <button onclick="setTab('inventario')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                <!-- Pestañas Principales (Navbar Interna Estilo Imagen 2) -->
+                <div class="bg-white border-b border-slate-200 px-8 flex space-x-8 shadow-sm">
+                    <button onclick="setTab('inventario')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
                         <i class="fa-solid fa-warehouse"></i><span>Inventario Actual</span>
                     </button>
-                    <button onclick="setTab('pedido')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                    <button onclick="setTab('pedido')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
                         <i class="fa-solid fa-cart-shopping"></i><span>Realizar Pedido</span>
                     </button>
-                    <button onclick="setTab('recepcion')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'recepcion' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                    <button onclick="setTab('recepcion')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'recepcion' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
                         <i class="fa-solid fa-truck-ramp-box"></i><span>Recepción y Pendientes</span>
                     </button>
                     ${isAdmin ? `
-                        <button onclick="setTab('reportes')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                        <button onclick="setTab('reportes')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
                             <i class="fa-solid fa-chart-pie"></i><span>Panel Admin & Reportes</span>
                         </button>
                     ` : ''}
                 </div>
 
-                <!-- CONTENIDO DE LAS PESTAÑAS -->
-                <div class="flex-1 p-6 max-w-7xl mx-auto w-full">
+                <!-- CONTENEDOR CENTRADO Y ORGANIZADO -->
+                <div class="flex-1 p-8 max-w-7xl mx-auto w-full space-y-6">
                     ${db.currentTab === 'inventario' ? renderInventoryTab() : ''}
                     ${db.currentTab === 'pedido' ? renderOrderTab() : ''}
                     ${db.currentTab === 'recepcion' ? renderReceptionTab() : ''}
@@ -281,57 +281,80 @@
             render();
         }
 
-        // --- PESTAÑA 1: INVENTARIO ACTUAL ---
+        // --- PESTAÑA 1: INVENTARIO ACTUAL (ESTILO EXACTO IMAGEN 2) ---
+        let inventorySearchQuery = '';
+
         function renderInventoryTab() {
             const isAdmin = db.currentUser.role === 'admin';
             const inv = db.inventory[db.currentSedetab][db.currentSection];
+            const filteredInv = inv.filter(i => i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase()));
 
             return `
                 <div class="space-y-6">
-                    <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex justify-between items-center">
+                    <!-- Tarjeta de Vista Actual -->
+                    <div class="bg-indigo-50/60 border border-indigo-100 p-5 rounded-2xl flex flex-wrap justify-between items-center gap-4 shadow-sm">
                         <div>
-                            <h3 class="font-bold text-slate-800">Vista Actual: Sede ${db.currentSedetab} / Sección ${db.currentSection.toUpperCase()}</h3>
-                            <p class="text-xs text-slate-500">Los datos mostrados corresponden exclusivamente a esta selección.</p>
+                            <h3 class="font-bold text-slate-900 flex items-center text-sm">
+                                <span class="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
+                                Vista Actual: Sede ${db.currentSedetab} / Sección ${db.currentSection.toUpperCase()}
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Los datos mostrados corresponden exclusivamente a esta selección.</p>
                         </div>
-                        ${isAdmin ? `
-                            <div class="flex gap-2">
-                                <button onclick="openAddProductModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition"><i class="fa-solid fa-plus mr-1.5"></i> Agregar Insumo</button>
-                                <button onclick="openBulkUploadModal()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Carga Masiva</button>
-                            </div>
-                        ` : ''}
+                        <div class="bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                            Usuario: ${db.currentUser.name}
+                        </div>
                     </div>
 
-                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                        <div class="p-4 border-b border-slate-200 flex justify-between items-center">
-                            <h3 class="font-bold text-slate-800">Lista de Insumos Disponibles</h3>
-                            <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-semibold">${inv.length} ítems</span>
+                    <!-- Tarjeta Contenedora Principal del Inventario -->
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6 space-y-6">
+                        <!-- Barra de Búsqueda y Botones (Estilo Imagen 2) -->
+                        <div class="flex flex-wrap justify-between items-center gap-4">
+                            <div class="relative flex-1 max-w-md">
+                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
+                                <input type="text" id="inv-search-input" oninput="inventorySearchQuery = this.value; render()" value="${inventorySearchQuery}" placeholder="Buscar por código o nombre de insumo..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600 transition">
+                            </div>
+
+                            ${isAdmin ? `
+                                <div class="flex flex-wrap gap-2">
+                                    <button onclick="openAddProductModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center"><i class="fa-solid fa-plus mr-1.5"></i> Agregar Nuevo Insumo</button>
+                                    <button onclick="openBulkUploadModal()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/20 transition flex items-center"><i class="fa-solid fa-file-excel mr-1.5"></i> Carga Masiva</button>
+                                </div>
+                            ` : ''}
                         </div>
-                        <div class="overflow-x-auto">
+
+                        <!-- Tabla de Inventario -->
+                        <div class="overflow-x-auto border border-slate-100 rounded-xl">
                             <table class="w-full text-left border-collapse">
                                 <thead>
-                                    <tr class="border-b border-slate-200 text-slate-400 text-xs uppercase tracking-wider bg-slate-50">
-                                        <th class="py-3 px-4">Código</th>
-                                        <th class="py-3 px-4">Nombre del Insumo</th>
-                                        <th class="py-3 px-4">Cantidad Disponible</th>
-                                        ${isAdmin ? `<th class="py-3 px-4 text-right">Acciones</th>` : ''}
+                                    <tr class="border-b border-slate-200 text-slate-400 text-[11px] uppercase tracking-wider bg-slate-50/70">
+                                        <th class="py-3.5 px-4 font-semibold">CÓDIGO</th>
+                                        <th class="py-3.5 px-4 font-semibold">NOMBRE DEL INSUMO</th>
+                                        <th class="py-3.5 px-4 font-semibold">CANTIDAD DISPONIBLE</th>
+                                        <th class="py-3.5 px-4 font-semibold">ESTADO DE STOCK</th>
+                                        <th class="py-3.5 px-4 font-semibold text-right">ACCIONES</th>
                                     </tr>
                                 </thead>
-                                <tbody class="divide-y divide-slate-100 text-sm">
-                                    ${inv.length === 0 ? `
-                                        <tr><td colspan="${isAdmin ? 4 : 3}" class="text-center py-8 text-slate-400">No hay insumos registrados en esta sección.</td></tr>
-                                    ` : inv.map((item, idx) => `
-                                        <tr class="hover:bg-slate-50/80 transition">
-                                            <td class="py-3.5 px-4 font-mono text-indigo-600 font-semibold">${item.code}</td>
-                                            <td class="py-3.5 px-4 text-slate-800">${item.name}</td>
-                                            <td class="py-3.5 px-4"><span class="px-2.5 py-1 bg-slate-100 rounded-lg font-bold ${item.qty > 10 ? 'text-emerald-600' : 'text-amber-600'}">${item.qty} unids</span></td>
-                                            ${isAdmin ? `
-                                                <td class="py-3.5 px-4 text-right space-x-2">
-                                                    <button onclick="editItem(${idx})" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-pen mr-1"></i> Modificar</button>
-                                                    <button onclick="deleteItem(${idx})" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-trash mr-1"></i> Eliminar</button>
+                                <tbody class="divide-y divide-slate-100 text-xs">
+                                    ${filteredInv.length === 0 ? `
+                                        <tr><td colspan="5" class="text-center py-10 text-slate-400">No se encontraron insumos registrados.</td></tr>
+                                    ` : filteredInv.map((item) => {
+                                        const originalIdx = inv.findIndex(i => i.code === item.code);
+                                        const stockStatus = item.qty > 10 ? '<span class="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full font-semibold text-[11px]">Stock Óptimo</span>' : '<span class="px-3 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-full font-semibold text-[11px]">Stock Bajo</span>';
+                                        return `
+                                            <tr class="hover:bg-slate-50/80 transition">
+                                                <td class="py-4 px-4 font-mono text-indigo-600 font-bold">${item.code}</td>
+                                                <td class="py-4 px-4 font-medium text-slate-800">${item.name}</td>
+                                                <td class="py-4 px-4 font-bold text-slate-900">${item.qty} unidades</td>
+                                                <td class="py-4 px-4">${stockStatus}</td>
+                                                <td class="py-4 px-4 text-right space-x-2">
+                                                    ${isAdmin ? `
+                                                        <button onclick="editItem(${originalIdx})" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold rounded-lg shadow-sm transition"><i class="fa-solid fa-pen mr-1"></i> Modificar</button>
+                                                        <button onclick="deleteItem(${originalIdx})" class="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-200 font-semibold rounded-lg shadow-sm transition"><i class="fa-solid fa-trash mr-1"></i> Eliminar</button>
+                                                    ` : `<span class="text-slate-400 italic">Solo lectura</span>`}
                                                 </td>
-                                            ` : ''}
-                                        </tr>
-                                    `).join('')}
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         </div>
@@ -349,12 +372,12 @@
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-800">Seleccionar Insumos para Pedido</h3>
+                        <h3 class="font-bold text-slate-800 text-sm">Seleccionar Insumos para Pedido</h3>
                         <p class="text-xs text-slate-500">Busca por código o nombre y añade las cantidades necesarias.</p>
                         
                         <div class="relative">
-                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
-                            <input type="text" id="order-search" oninput="filterOrderItems()" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
+                            <input type="text" id="order-search" oninput="filterOrderItems()" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                         </div>
 
                         <div id="order-search-results" class="space-y-2 max-h-96 overflow-y-auto">
@@ -363,10 +386,10 @@
                                     <div>
                                         <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
                                         <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
-                                        <p class="text-[10px] text-slate-400">Disponible en inventario: ${item.qty}</p>
+                                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold">
+                                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold">
                                         <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
                                     </div>
                                 </div>
@@ -377,7 +400,7 @@
                     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
                         <div>
                             <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-slate-800">Carrito de Pedido</h3>
+                                <h3 class="font-bold text-slate-800 text-sm">Carrito de Pedido</h3>
                                 <span class="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-bold">${currentOrderItems.length} ítems</span>
                             </div>
                             <div id="selected-order-list" class="space-y-2 max-h-72 overflow-y-auto">
@@ -420,10 +443,10 @@
                     <div>
                         <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
                         <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
-                        <p class="text-[10px] text-slate-400">Disponible en inventario: ${item.qty}</p>
+                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold">
+                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold">
                         <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
                     </div>
                 </div>
@@ -480,7 +503,7 @@
                 <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
                     <div class="flex justify-between items-center">
                         <div>
-                            <h3 class="font-bold text-slate-800">Historial de Pedidos y Recepción</h3>
+                            <h3 class="font-bold text-slate-800 text-sm">Historial de Pedidos y Recepción</h3>
                             <p class="text-xs text-slate-500">Gestiona entregas parciales y cantidades pendientes de cada pedido.</p>
                         </div>
                     </div>
@@ -489,16 +512,16 @@
                         ${db.orders.length === 0 ? `
                             <div class="text-center py-12 text-slate-400">
                                 <i class="fa-solid fa-clipboard-list text-3xl mb-2 text-slate-300"></i>
-                                <p class="text-sm">No hay pedidos realizados aún.</p>
+                                <p class="text-xs">No hay pedidos realizados aún.</p>
                             </div>
                         ` : db.orders.map(order => `
                             <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4">
                                 <div>
                                     <div class="flex items-center space-x-2">
                                         <span class="font-mono text-xs text-indigo-600 font-bold">${order.id}</span>
-                                        <span class="text-sm font-semibold text-slate-800">${order.userName} realizó pedido el ${order.date}</span>
+                                        <span class="text-xs font-semibold text-slate-800">${order.userName} realizó pedido el ${order.date}</span>
                                     </div>
-                                    <p class="text-xs text-slate-500 mt-1">Sede: ${order.sede} (${order.section}) • Estado: <span class="font-bold ${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'}">${order.status}</span></p>
+                                    <p class="text-[11px] text-slate-500 mt-1">Sede: ${order.sede} (${order.section}) • Estado: <span class="font-bold ${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'}">${order.status}</span></p>
                                 </div>
                                 <div class="flex items-center space-x-2">
                                     <button onclick="openOrderDetail('${order.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition">Ver insumos ></button>
@@ -517,32 +540,32 @@
 
             return `
                 <div class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div onclick="openTotalOrdersModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div onclick="openTotalOrdersModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
                             <div class="flex items-center space-x-4">
-                                <div class="bg-indigo-50 text-indigo-600 p-3 rounded-xl"><i class="fa-solid fa-file-invoice text-xl"></i></div>
+                                <div class="bg-indigo-50 text-indigo-600 p-3.5 rounded-xl"><i class="fa-solid fa-file-invoice text-xl"></i></div>
                                 <div>
-                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
                                     <h4 class="text-xl font-bold text-slate-800 mt-0.5">${totalOrdersCount} órdenes</h4>
                                 </div>
                             </div>
                         </div>
 
-                        <div onclick="openMonthlyAverageModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                        <div onclick="openMonthlyAverageModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
                             <div class="flex items-center space-x-4">
-                                <div class="bg-emerald-50 text-emerald-600 p-3 rounded-xl"><i class="fa-solid fa-calendar-days text-xl"></i></div>
+                                <div class="bg-emerald-50 text-emerald-600 p-3.5 rounded-xl"><i class="fa-solid fa-calendar-days text-xl"></i></div>
                                 <div>
-                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Promedio Mensual (Meses) <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Promedio Mensual (Meses) <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
                                     <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes</h4>
                                 </div>
                             </div>
                         </div>
 
-                        <div onclick="openAnnualModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                        <div onclick="openAnnualModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
                             <div class="flex items-center space-x-4">
-                                <div class="bg-cyan-50 text-cyan-600 p-3 rounded-xl"><i class="fa-solid fa-chart-line text-xl"></i></div>
+                                <div class="bg-cyan-50 text-cyan-600 p-3.5 rounded-xl"><i class="fa-solid fa-chart-line text-xl"></i></div>
                                 <div>
-                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Solicitado Este Año <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Total Solicitado Este Año <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
                                     <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes y anual</h4>
                                 </div>
                             </div>
@@ -565,15 +588,15 @@
                         <form onsubmit="saveNewProduct(event)" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Código del Insumo</label>
-                                <input type="text" id="new-code" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Ej. HOS-004">
+                                <input type="text" id="new-code" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Ej. HOS-004">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre del Insumo</label>
-                                <input type="text" id="new-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Ej. Alcohol Antiséptico 1 Litro">
+                                <input type="text" id="new-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Ej. Alcohol Antiséptico 1 Litro">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad Inicial</label>
-                                <input type="number" id="new-qty" required min="0" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="100">
+                                <input type="number" id="new-qty" required min="0" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="100">
                             </div>
                             <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
                                 <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
@@ -616,15 +639,15 @@
                         <form onsubmit="updateItem(event, ${idx})" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Código</label>
-                                <input type="text" id="edit-code" required value="${item.code}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                                <input type="text" id="edit-code" required value="${item.code}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre</label>
-                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad</label>
-                                <input type="number" id="edit-qty" required min="0" value="${item.qty}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                                <input type="number" id="edit-qty" required min="0" value="${item.qty}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
                             </div>
                             <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
                                 <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
@@ -1102,7 +1125,7 @@
                         <form onsubmit="saveNewPassword(event)" class="space-y-4">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Nueva Contraseña</label>
-                                <input type="password" id="new-admin-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Nueva contraseña">
+                                <input type="password" id="new-admin-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Nueva contraseña">
                             </div>
                             <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
                                 <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
