@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Integral de Inventarios ICV & CIE</title>
+    <title>ICV & CIE Insumos - Sistema de Control</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -15,23 +15,26 @@
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div id="app" class="flex-1 flex flex-col">
-        <!-- El contenido se renderiza dinámicamente con JavaScript -->
+        <!-- Renderizado dinámico -->
     </div>
 
+    <!-- MODALES -->
+    <div id="modal-container"></div>
+
     <script>
-        // --- BASE DE DATOS LOCAL Y ESTADO ---
-        let db = JSON.parse(localStorage.getItem('icv_cie_db')) || {
+        // --- BASE DE DATOS Y ESTADO ---
+        let db = JSON.parse(localStorage.getItem('icv_cie_db_v2')) || {
             users: [
                 { name: 'Lindsay Velasco', doc: '27984352', pass: 'admin', role: 'admin' }
             ],
             currentSedetab: 'ICV', // 'ICV' o 'CIE'
             currentSection: 'hospitalarios', // 'hospitalarios' o 'comercializadora'
+            currentTab: 'inventario', // 'inventario', 'pedido', ' recepcion', 'reportes'
             currentUser: null,
-            notifications: [],
             orders: [],
             inventory: {
                 ICV: {
@@ -58,10 +61,9 @@
         };
 
         function saveDB() {
-            localStorage.setItem('icv_cie_db', JSON.stringify(db));
+            localStorage.setItem('icv_cie_db_v2', JSON.stringify(db));
         }
 
-        // --- INICIALIZACIÓN ---
         window.onload = function() {
             render();
         };
@@ -75,61 +77,61 @@
             }
         }
 
-        // --- PANTALLA DE LOGIN Y REGISTRO ---
-        let authMode = 'login'; // 'login' o 'register'
+        // --- AUTENTICACIÓN ---
+        let authMode = 'login';
 
         function renderLogin() {
             return `
-                <div class="flex-1 flex items-center justify-center p-4">
-                    <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl w-full max-w-md">
+                <div class="flex-1 flex items-center justify-center p-4 bg-slate-100">
+                    <div class="bg-white border border-slate-200 p-8 rounded-2xl shadow-xl w-full max-w-md">
                         <div class="text-center mb-8">
-                            <div class="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
+                            <div class="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-600/30">
                                 <i class="fa-solid fa-boxes-stacked text-2xl text-white"></i>
                             </div>
-                            <h1 class="text-2xl font-bold tracking-tight">ICV & CIE Insumos</h1>
-                            <p class="text-xs text-slate-400 mt-1">Sistema de Control de Inventarios y Pedidos</p>
+                            <h1 class="text-2xl font-bold tracking-tight text-slate-900">ICV & CIE Insumos</h1>
+                            <p class="text-xs text-slate-500 mt-1">Sistema de Control de Inventarios y Pedidos</p>
                         </div>
 
-                        <div class="flex bg-slate-900 p-1 rounded-xl mb-6 border border-slate-700">
-                            <button onclick="authMode='login'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}">Iniciar Sesión</button>
-                            <button onclick="authMode='register'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}">Registrarse</button>
+                        <div class="flex bg-slate-100 p-1 rounded-xl mb-6 border border-slate-200">
+                            <button onclick="authMode='login'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}">Iniciar Sesión</button>
+                            <button onclick="authMode='register'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}">Registrarse</button>
                         </div>
 
                         ${authMode === 'login' ? `
                             <form onsubmit="handleLogin(event)" class="space-y-4">
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">USUARIO O DOCUMENTO</label>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">USUARIO O DOCUMENTO</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500"><i class="fa-solid fa-user"></i></span>
-                                        <input type="text" id="login-user" required class="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500" placeholder="usuario o Documento">
+                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user"></i></span>
+                                        <input type="text" id="login-user" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="usuario o Documento">
                                     </div>
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Contraseña</label>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500"><i class="fa-solid fa-lock"></i></span>
-                                        <input type="password" id="login-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500" placeholder="••••••••">
+                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
+                                        <input type="password" id="login-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="••••••••">
                                     </div>
                                 </div>
-                                <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                                <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
                                     Entrar al Sistema
                                 </button>
                             </form>
                         ` : `
                             <form onsubmit="handleRegister(event)" class="space-y-4">
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nombre Completo</label>
-                                    <input type="text" id="reg-name" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500" placeholder="Tu nombre">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre Completo</label>
+                                    <input type="text" id="reg-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="Tu nombre">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Número de Documento</label>
-                                    <input type="text" id="reg-doc" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500" placeholder="Número de documento">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Número de Documento</label>
+                                    <input type="text" id="reg-doc" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="Número de documento">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Contraseña</label>
-                                    <input type="password" id="reg-pass" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 text-sm focus:outline-none focus:border-indigo-500" placeholder="••••••••">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+                                    <input type="password" id="reg-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="••••••••">
                                 </div>
-                                <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
+                                <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
                                     Registrarse
                                 </button>
                             </form>
@@ -144,7 +146,6 @@
             const u = document.getElementById('login-user').value.trim();
             const p = document.getElementById('login-pass').value.trim();
 
-            // Admin login check (by name Lindsayvelasco or document 27984352)
             if ((u.toLowerCase() === 'lindsayvelasco' || u === '27984352') && p === 'admin') {
                 db.currentUser = { name: 'Lindsay Velasco', role: 'admin', doc: '27984352' };
                 saveDB();
@@ -190,125 +191,75 @@
         // --- DASHBOARD PRINCIPAL ---
         function renderDashboard() {
             const isAdmin = db.currentUser.role === 'admin';
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
 
             return `
                 <!-- Navbar Superior -->
-                <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-wrap justify-between items-center gap-4">
-                    <div class="flex items-center space-x-4">
-                        <div class="bg-indigo-600 text-white p-2.5 rounded-xl font-bold"><i class="fa-solid fa-warehouse"></i></div>
+                <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-indigo-600 text-white p-2.5 rounded-xl font-bold"><i class="fa-solid fa-boxes-stacked"></i></div>
                         <div>
-                            <h2 class="font-bold text-lg">Inventario ICV & CIE</h2>
-                            <p class="text-xs text-slate-400">Usuario: <span class="text-indigo-400 font-semibold">${db.currentUser.name}</span> (${isAdmin ? 'Administrador' : 'Usuario'})</p>
+                            <h2 class="font-bold text-slate-900 text-base">ICV & CIE Insumos</h2>
+                            <p class="text-xs text-slate-500">Gestión Multisede</p>
                         </div>
                     </div>
 
                     <div class="flex items-center space-x-3">
-                        ${isAdmin ? `
-                            <button onclick="openChangePasswordModal()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition"><i class="fa-solid fa-key mr-1.5"></i> Cambiar Contraseña</button>
-                        ` : ''}
-                        <button onclick="logout()" class="px-3 py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-semibold rounded-xl transition border border-rose-500/30"><i class="fa-solid fa-right-from-bracket mr-1.5"></i> Salir</button>
+                        ${isAdmin ? `<button onclick="openChangePasswordModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"><i class="fa-solid fa-key mr-1.5"></i> Cambiar Contraseña</button>` : ''}
+                        <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-user-shield text-indigo-600"></i>
+                            <div class="text-xs">
+                                <p class="font-bold text-slate-800">${db.currentUser.name}</p>
+                                <p class="text-[10px] text-slate-500 uppercase">${isAdmin ? 'Administrador' : 'Usuario'}</p>
+                            </div>
+                        </div>
+                        <button onclick="logout()" class="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition" title="Cerrar Sesión"><i class="fa-solid fa-power-off"></i></button>
                     </div>
                 </header>
 
-                <div class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
-                    <!-- Selector de Sedes e Intercambio -->
-                    <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60">
+                <!-- Barra de Sede y Sección -->
+                <div class="bg-indigo-900 text-white px-6 py-3 flex flex-wrap justify-between items-center gap-4 shadow">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SEDE:</span>
                         <div class="flex space-x-2">
-                            <button onclick="setSede('ICV')" class="px-5 py-2.5 rounded-xl font-bold text-sm transition ${db.currentSedetab === 'ICV' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}">Sede ICV</button>
-                            <button onclick="setSede('CIE')" class="px-5 py-2.5 rounded-xl font-bold text-sm transition ${db.currentSedetab === 'CIE' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}">Sede CIE</button>
-                        </div>
-
-                        <div class="flex space-x-2">
-                            <button onclick="setSection('hospitalarios')" class="px-4 py-2 rounded-xl text-xs font-semibold transition ${db.currentSection === 'hospitalarios' ? 'bg-slate-700 text-indigo-400 border border-indigo-500/40' : 'text-slate-400 hover:text-white'}"><i class="fa-solid fa-hospital mr-1.5"></i> Productos Hospitalarios</button>
-                            <button onclick="setSection('comercializadora')" class="px-4 py-2 rounded-xl text-xs font-semibold transition ${db.currentSection === 'comercializadora' ? 'bg-slate-700 text-indigo-400 border border-indigo-500/40' : 'text-slate-400 hover:text-white'}"><i class="fa-solid fa-store mr-1.5"></i> Comercializadora</button>
+                            <button onclick="setSede('ICV')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition ${db.currentSedetab === 'ICV' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede ICV</button>
+                            <button onclick="setSede('CIE')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition ${db.currentSedetab === 'CIE' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede CIE</button>
                         </div>
                     </div>
 
-                    <!-- Panel de Estadísticas (Solo Admin) -->
-                    ${isAdmin ? renderAdminStats() : ''}
-
-                    <!-- Sección de Inventario e Acciones -->
-                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
-                        <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-                            <div>
-                                <h3 class="text-lg font-bold">Inventario Actual - Sede ${db.currentSedetab} (${db.currentSection.toUpperCase()})</h3>
-                                <p class="text-xs text-slate-400">Consulta existencias y realiza pedidos o gestión.</p>
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="openOrderModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition"><i class="fa-solid fa-cart-shopping mr-1.5"></i> Realizar Pedido</button>
-                                ${isAdmin ? `
-                                    <button onclick="openAddProductModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition"><i class="fa-solid fa-plus mr-1.5"></i> Agregar Insumo</button>
-                                    <button onclick="openBulkUploadModal()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Carga Masiva</button>
-                                ` : ''}
-                            </div>
-                        </div>
-
-                        <!-- Tabla de Inventario -->
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
-                                        <th class="py-3 px-4">Código</th>
-                                        <th class="py-3 px-4">Nombre del Insumo</th>
-                                        <th class="py-3 px-4">Cantidad Disponible</th>
-                                        ${isAdmin ? `<th class="py-3 px-4 text-right">Acciones</th>` : ''}
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-700/60 text-sm">
-                                    ${inv.length === 0 ? `
-                                        <tr><td colspan="${isAdmin ? 4 : 3}" class="text-center py-6 text-slate-500">No hay insumos registrados en esta sección.</td></tr>
-                                    ` : inv.map((item, idx) => `
-                                        <tr class="hover:bg-slate-700/30 transition">
-                                            <td class="py-3.5 px-4 font-mono text-indigo-400 font-semibold">${item.code}</td>
-                                            <td class="py-3.5 px-4">${item.name}</td>
-                                            <td class="py-3.5 px-4"><span class="px-2.5 py-1 bg-slate-900 rounded-lg font-bold ${item.qty > 10 ? 'text-emerald-400' : 'text-amber-400'}">${item.qty} unids</span></td>
-                                            ${isAdmin ? `
-                                                <td class="py-3.5 px-4 text-right space-x-2">
-                                                    <button onclick="editItem(${idx})" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-pen"></i> Modificar</button>
-                                                    <button onclick="deleteItem(${idx})" class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-trash"></i> Eliminar</button>
-                                                </td>
-                                            ` : ''}
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Historial de Pedidos y Recepción de Pendientes -->
-                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl">
-                        <div class="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 class="text-lg font-bold">Historial de Pedidos y Recepción</h3>
-                                <p class="text-xs text-slate-400">Gestiona entregas parciales y pendientes de tus pedidos.</p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-3">
-                            ${db.orders.length === 0 ? `
-                                <p class="text-center py-6 text-slate-500 text-sm">No hay pedidos realizados aún.</p>
-                            ` : db.orders.map(order => `
-                                <div class="bg-slate-900 border border-slate-700/60 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4">
-                                    <div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="font-mono text-xs text-indigo-400 font-bold">${order.id}</span>
-                                            <span class="text-sm font-semibold">${order.userName} realizó pedido el ${order.date}</span>
-                                        </div>
-                                        <p class="text-xs text-slate-400 mt-1">Sede: ${order.sede} (${order.section}) • Estado: <span class="font-bold ${order.status === 'Completado' ? 'text-emerald-400' : 'text-amber-400'}">${order.status}</span></p>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <button onclick="openOrderDetail('${order.id}')" class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold rounded-lg transition">Ver insumos ></button>
-                                        ${isAdmin ? `<button onclick="openReceiveModal('${order.id}')" class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-semibold rounded-lg transition">Registrar Llegada</button>` : ''}
-                                    </div>
-                                </div>
-                            `).join('')}
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SECCIÓN:</span>
+                        <div class="flex space-x-2">
+                            <button onclick="setSection('hospitalarios')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${db.currentSection === 'hospitalarios' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-hospital mr-1"></i> Productos Hospitalarios</button>
+                            <button onclick="setSection('comercializadora')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${db.currentSection === 'comercializadora' ? 'bg-white text-indigo-900 shadow' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-store mr-1"></i> Comercializadora</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- MODALES -->
-                <div id="modal-container"></div>
+                <!-- Pestañas Principales (Navbar Interna) -->
+                <div class="bg-white border-b border-slate-200 px-6 flex space-x-6">
+                    <button onclick="setTab('inventario')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                        <i class="fa-solid fa-warehouse"></i><span>Inventario Actual</span>
+                    </button>
+                    <button onclick="setTab('pedido')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                        <i class="fa-solid fa-cart-shopping"></i><span>Realizar Pedido</span>
+                    </button>
+                    <button onclick="setTab('recepcion')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'recepcion' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                        <i class="fa-solid fa-truck-ramp-box"></i><span>Recepción y Pendientes</span>
+                    </button>
+                    ${isAdmin ? `
+                        <button onclick="setTab('reportes')" class="py-3.5 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-chart-pie"></i><span>Panel Admin & Reportes</span>
+                        </button>
+                    ` : ''}
+                </div>
+
+                <!-- CONTENIDO DE LAS PESTAÑAS -->
+                <div class="flex-1 p-6 max-w-7xl mx-auto w-full">
+                    ${db.currentTab === 'inventario' ? renderInventoryTab() : ''}
+                    ${db.currentTab === 'pedido' ? renderOrderTab() : ''}
+                    ${db.currentTab === 'recepcion' ? renderReceptionTab() : ''}
+                    ${db.currentTab === 'reportes' && isAdmin ? renderReportsTab() : ''}
+                </div>
             `;
         }
 
@@ -324,37 +275,276 @@
             render();
         }
 
-        // --- ESTADÍSTICAS ADMIN ---
-        function renderAdminStats() {
-            const totalOrdersCount = db.orders.length;
+        function setTab(tab) {
+            db.currentTab = tab;
+            saveDB();
+            render();
+        }
+
+        // --- PESTAÑA 1: INVENTARIO ACTUAL ---
+        function renderInventoryTab() {
+            const isAdmin = db.currentUser.role === 'admin';
+            const inv = db.inventory[db.currentSedetab][db.currentSection];
+
             return `
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div onclick="openTotalOrdersModal()" class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg cursor-pointer hover:border-indigo-500 transition">
-                        <div class="flex items-center space-x-4">
-                            <div class="bg-indigo-600/20 text-indigo-400 p-3 rounded-xl"><i class="fa-solid fa-file-invoice text-xl"></i></div>
-                            <div>
-                                <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
-                                <h4 class="text-xl font-bold mt-0.5">${totalOrdersCount} órdenes</h4>
+                <div class="space-y-6">
+                    <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-slate-800">Vista Actual: Sede ${db.currentSedetab} / Sección ${db.currentSection.toUpperCase()}</h3>
+                            <p class="text-xs text-slate-500">Los datos mostrados corresponden exclusivamente a esta selección.</p>
+                        </div>
+                        ${isAdmin ? `
+                            <div class="flex gap-2">
+                                <button onclick="openAddProductModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition"><i class="fa-solid fa-plus mr-1.5"></i> Agregar Insumo</button>
+                                <button onclick="openBulkUploadModal()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Carga Masiva</button>
                             </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-slate-200 flex justify-between items-center">
+                            <h3 class="font-bold text-slate-800">Lista de Insumos Disponibles</h3>
+                            <span class="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-semibold">${inv.length} ítems</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-slate-200 text-slate-400 text-xs uppercase tracking-wider bg-slate-50">
+                                        <th class="py-3 px-4">Código</th>
+                                        <th class="py-3 px-4">Nombre del Insumo</th>
+                                        <th class="py-3 px-4">Cantidad Disponible</th>
+                                        ${isAdmin ? `<th class="py-3 px-4 text-right">Acciones</th>` : ''}
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-sm">
+                                    ${inv.length === 0 ? `
+                                        <tr><td colspan="${isAdmin ? 4 : 3}" class="text-center py-8 text-slate-400">No hay insumos registrados en esta sección.</td></tr>
+                                    ` : inv.map((item, idx) => `
+                                        <tr class="hover:bg-slate-50/80 transition">
+                                            <td class="py-3.5 px-4 font-mono text-indigo-600 font-semibold">${item.code}</td>
+                                            <td class="py-3.5 px-4 text-slate-800">${item.name}</td>
+                                            <td class="py-3.5 px-4"><span class="px-2.5 py-1 bg-slate-100 rounded-lg font-bold ${item.qty > 10 ? 'text-emerald-600' : 'text-amber-600'}">${item.qty} unids</span></td>
+                                            ${isAdmin ? `
+                                                <td class="py-3.5 px-4 text-right space-x-2">
+                                                    <button onclick="editItem(${idx})" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-pen mr-1"></i> Modificar</button>
+                                                    <button onclick="deleteItem(${idx})" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-lg transition"><i class="fa-solid fa-trash mr-1"></i> Eliminar</button>
+                                                </td>
+                                            ` : ''}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- PESTAÑA 2: REALIZAR PEDIDO ---
+        let currentOrderItems = [];
+
+        function renderOrderTab() {
+            const inv = db.inventory[db.currentSedetab][db.currentSection];
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-800">Seleccionar Insumos para Pedido</h3>
+                        <p class="text-xs text-slate-500">Busca por código o nombre y añade las cantidades necesarias.</p>
+                        
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
+                            <input type="text" id="order-search" oninput="filterOrderItems()" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                        </div>
+
+                        <div id="order-search-results" class="space-y-2 max-h-96 overflow-y-auto">
+                            ${inv.map(item => `
+                                <div class="flex justify-between items-center p-3 border border-slate-100 hover:bg-slate-50 rounded-xl transition text-xs">
+                                    <div>
+                                        <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
+                                        <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
+                                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold">
+                                        <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
+                                    </div>
+                                </div>
+                            `).join('')}
                         </div>
                     </div>
 
-                    <div onclick="openMonthlyAverageModal()" class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg cursor-pointer hover:border-indigo-500 transition">
-                        <div class="flex items-center space-x-4">
-                            <div class="bg-emerald-600/20 text-emerald-400 p-3 rounded-xl"><i class="fa-solid fa-calendar-days text-xl"></i></div>
-                            <div>
-                                <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Promedio Mensual (Meses) <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
-                                <h4 class="text-xl font-bold mt-0.5">Ver por mes</h4>
+                    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-slate-800">Carrito de Pedido</h3>
+                                <span class="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-bold">${currentOrderItems.length} ítems</span>
                             </div>
+                            <div id="selected-order-list" class="space-y-2 max-h-72 overflow-y-auto">
+                                ${currentOrderItems.length === 0 ? `
+                                    <div class="text-center py-12 text-slate-400">
+                                        <i class="fa-solid fa-cart-shopping text-3xl mb-2 text-slate-300"></i>
+                                        <p class="text-xs">No hay insumos agregados al pedido actual.</p>
+                                    </div>
+                                ` : currentOrderItems.map((item, idx) => `
+                                    <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200">
+                                        <div>
+                                            <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
+                                            <p class="font-semibold text-slate-800">${item.name}</p>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg font-bold">${item.qtyRequested} sol.</span>
+                                            <button onclick="currentOrderItems.splice(${idx}, 1); render()" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <button onclick="submitOrder()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-paper-plane"></i><span>Realizar Pedido Oficial</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function filterOrderItems() {
+            const query = document.getElementById('order-search').value.toLowerCase();
+            const inv = db.inventory[db.currentSedetab][db.currentSection];
+            const container = document.getElementById('order-search-results');
+            const filtered = inv.filter(i => i.code.toLowerCase().includes(query) || i.name.toLowerCase().includes(query));
+
+            container.innerHTML = filtered.map(item => `
+                <div class="flex justify-between items-center p-3 border border-slate-100 hover:bg-slate-50 rounded-xl transition text-xs">
+                    <div>
+                        <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
+                        <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
+                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-center font-bold">
+                        <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addOrderItemSelected(code, name) {
+            const qtyInput = document.getElementById(`qty-${code}`);
+            const qty = parseInt(qtyInput.value) || 1;
+
+            const existing = currentOrderItems.find(x => x.code === code);
+            if (existing) {
+                existing.qtyRequested += qty;
+            } else {
+                currentOrderItems.push({ code, name, qtyRequested: qty, qtyPending: qty, qtyReceived: 0 });
+            }
+            render();
+        }
+
+        function submitOrder() {
+            if (currentOrderItems.length === 0) {
+                alert('Debe agregar al menos un insumo al pedido.');
+                return;
+            }
+
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+
+            const newOrder = {
+                id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
+                userName: db.currentUser.name,
+                sede: db.currentSedetab,
+                section: db.currentSection,
+                date: dateStr,
+                time: timeStr,
+                status: 'Pendiente',
+                items: JSON.parse(JSON.stringify(currentOrderItems))
+            };
+
+            db.orders.unshift(newOrder);
+            currentOrderItems = [];
+            db.currentTab = 'recepcion';
+            saveDB();
+            alert('¡Pedido realizado con éxito!');
+            render();
+        }
+
+        // --- PESTAÑA 3: RECEPCIÓN Y PENDIENTES ---
+        function renderReceptionTab() {
+            const isAdmin = db.currentUser.role === 'admin';
+
+            return `
+                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-slate-800">Historial de Pedidos y Recepción</h3>
+                            <p class="text-xs text-slate-500">Gestiona entregas parciales y cantidades pendientes de cada pedido.</p>
                         </div>
                     </div>
 
-                    <div onclick="openAnnualModal()" class="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-lg cursor-pointer hover:border-indigo-500 transition">
-                        <div class="flex items-center space-x-4">
-                            <div class="bg-cyan-600/20 text-cyan-400 p-3 rounded-xl"><i class="fa-solid fa-chart-line text-xl"></i></div>
-                            <div>
-                                <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Solicitado Este Año <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
-                                <h4 class="text-xl font-bold mt-0.5">Ver por mes y anual</h4>
+                    <div class="space-y-3">
+                        ${db.orders.length === 0 ? `
+                            <div class="text-center py-12 text-slate-400">
+                                <i class="fa-solid fa-clipboard-list text-3xl mb-2 text-slate-300"></i>
+                                <p class="text-sm">No hay pedidos realizados aún.</p>
+                            </div>
+                        ` : db.orders.map(order => `
+                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4">
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-mono text-xs text-indigo-600 font-bold">${order.id}</span>
+                                        <span class="text-sm font-semibold text-slate-800">${order.userName} realizó pedido el ${order.date}</span>
+                                    </div>
+                                    <p class="text-xs text-slate-500 mt-1">Sede: ${order.sede} (${order.section}) • Estado: <span class="font-bold ${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'}">${order.status}</span></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="openOrderDetail('${order.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition">Ver insumos ></button>
+                                    ${isAdmin ? `<button onclick="openReceiveModal('${order.id}')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition">Registrar Llegada</button>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- PESTAÑA 4: PANEL ADMIN & REPORTES ---
+        function renderReportsTab() {
+            const totalOrdersCount = db.orders.length;
+
+            return `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div onclick="openTotalOrdersModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-indigo-50 text-indigo-600 p-3 rounded-xl"><i class="fa-solid fa-file-invoice text-xl"></i></div>
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">${totalOrdersCount} órdenes</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div onclick="openMonthlyAverageModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-emerald-50 text-emerald-600 p-3 rounded-xl"><i class="fa-solid fa-calendar-days text-xl"></i></div>
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Promedio Mensual (Meses) <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes</h4>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div onclick="openAnnualModal()" class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
+                            <div class="flex items-center space-x-4">
+                                <div class="bg-cyan-50 text-cyan-600 p-3 rounded-xl"><i class="fa-solid fa-chart-line text-xl"></i></div>
+                                <div>
+                                    <p class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Solicitado Este Año <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes y anual</h4>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -362,30 +552,135 @@
             `;
         }
 
-        // --- CARGA MASIVA DE INSUMOS ---
+        // --- GESTIÓN DE INSUMOS (AGREGAR, MODIFICAR, ELIMINAR, CARGA MASIVA) ---
+        function openAddProductModal() {
+            const container = document.getElementById('modal-container');
+            container.innerHTML = `
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-bold text-slate-800">Agregar Nuevo Insumo</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <form onsubmit="saveNewProduct(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Código del Insumo</label>
+                                <input type="text" id="new-code" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Ej. HOS-004">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre del Insumo</label>
+                                <input type="text" id="new-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Ej. Alcohol Antiséptico 1 Litro">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad Inicial</label>
+                                <input type="number" id="new-qty" required min="0" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="100">
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Guardar Insumo</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveNewProduct(e) {
+            e.preventDefault();
+            const code = document.getElementById('new-code').value.trim();
+            const name = document.getElementById('new-name').value.trim();
+            const qty = parseInt(document.getElementById('new-qty').value);
+
+            const inv = db.inventory[db.currentSedetab][db.currentSection];
+            if (inv.some(x => x.code === code)) {
+                alert('Ya existe un insumo con este código en la sección.');
+                return;
+            }
+
+            inv.push({ code, name, qty });
+            saveDB();
+            closeModal();
+            render();
+        }
+
+        function editItem(idx) {
+            const item = db.inventory[db.currentSedetab][db.currentSection][idx];
+            const container = document.getElementById('modal-container');
+            container.innerHTML = `
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-bold text-slate-800">Modificar Insumo</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <form onsubmit="updateItem(event, ${idx})" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Código</label>
+                                <input type="text" id="edit-code" required value="${item.code}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre</label>
+                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad</label>
+                                <input type="number" id="edit-qty" required min="0" value="${item.qty}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Actualizar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateItem(e, idx) {
+            e.preventDefault();
+            const code = document.getElementById('edit-code').value.trim();
+            const name = document.getElementById('edit-name').value.trim();
+            const qty = parseInt(document.getElementById('edit-qty').value);
+
+            const inv = db.inventory[db.currentSedetab][db.currentSection];
+            inv[idx] = { code, name, qty };
+            saveDB();
+            closeModal();
+            render();
+        }
+
+        function deleteItem(idx) {
+            if (confirm('¿Estás segura de eliminar este insumo?')) {
+                db.inventory[db.currentSedetab][db.currentSection].splice(idx, 1);
+                saveDB();
+                render();
+            }
+        }
+
+        // --- CARGA MASIVA ---
         function openBulkUploadModal() {
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-4">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-lg space-y-4 shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Carga Masiva de Insumos</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Carga Masiva de Insumos</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-400">Sube un archivo Excel (` + "`" + `.xlsx o .csv` + "`" + `) con dos columnas: Código y Nombre. Los insumos se agregarán a la sección actual con cantidad inicial 0.</p>
+                        <p class="text-xs text-slate-500">Sube un archivo Excel (.xlsx o .csv) con dos columnas: <strong>Código</strong> y <strong>Nombre</strong>. Se agregarán a Sede ${db.currentSedetab} (${db.currentSection}) con cantidad inicial 0.</p>
                         
-                        <div class="flex gap-2">
-                            <button onclick="downloadTemplate()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-download mr-1.5"></i> Descargar Plantilla Excel</button>
+                        <div>
+                            <button onclick="downloadTemplate()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-xl text-slate-700 transition"><i class="fa-solid fa-download mr-1.5"></i> Descargar Plantilla Excel</button>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-semibold text-slate-400 mb-2">Seleccionar Archivo Excel</label>
-                            <input type="file" id="bulk-file" accept=".xlsx, .xls, .csv" class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+                            <label class="block text-xs font-semibold text-slate-600 mb-2">Seleccionar Archivo Excel</label>
+                            <input type="file" id="bulk-file" accept=".xlsx, .xls, .csv" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
                         </div>
 
-                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                            <button onclick="processBulkUpload()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-xl text-white transition">Cargar Insumos</button>
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                            <button onclick="processBulkUpload()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Cargar Insumos</button>
                         </div>
                     </div>
                 </div>
@@ -416,8 +711,7 @@
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     let addedCount = 0;
@@ -449,279 +743,48 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // --- GESTIÓN DE PRODUCTOS ---
-        function openAddProductModal() {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Agregar Nuevo Insumo</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <form onsubmit="saveNewProduct(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Código del Insumo</label>
-                                <input type="text" id="new-code" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500" placeholder="Ej. HOS-004">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Nombre del Insumo</label>
-                                <input type="text" id="new-name" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500" placeholder="Ej. Alcohol Antiséptico 1 Litro">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Cantidad Inicial</label>
-                                <input type="number" id="new-qty" required min="0" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500" placeholder="100">
-                            </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-xl text-white transition">Guardar Insumo</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function saveNewProduct(e) {
-            e.preventDefault();
-            const code = document.getElementById('new-code').value.trim();
-            const name = document.getElementById('new-name').value.trim();
-            const qty = parseInt(document.getElementById('new-qty').value);
-
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            if (inv.some(x => x.code === code)) {
-                alert('Ya existe un insumo con este código en la sección.');
-                return;
-            }
-
-            inv.push({ code, name, qty });
-            saveDB();
-            closeModal();
-            render();
-        }
-
-        function editItem(idx) {
-            const item = db.inventory[db.currentSedetab][db.currentSection][idx];
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Modificar Insumo</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <form onsubmit="updateItem(event, ${idx})" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Código</label>
-                                <input type="text" id="edit-code" required value="${item.code}" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Nombre</label>
-                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Cantidad</label>
-                                <input type="number" id="edit-qty" required min="0" value="${item.qty}" class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500">
-                            </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-xl text-white transition">Actualizar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function updateItem(e, idx) {
-            e.preventDefault();
-            const code = document.getElementById('edit-code').value.trim();
-            const name = document.getElementById('edit-name').value.trim();
-            const qty = parseInt(document.getElementById('edit-qty').value);
-
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            inv[idx] = { code, name, qty };
-            saveDB();
-            closeModal();
-            render();
-        }
-
-        function deleteItem(idx) {
-            if (confirm('¿Estás segura de eliminar este insumo?')) {
-                db.inventory[db.currentSedetab][db.currentSection].splice(idx, 1);
-                saveDB();
-                render();
-            }
-        }
-
-        // --- GESTIÓN DE PEDIDOS ---
-        let currentOrderItems = [];
-
-        function openOrderModal() {
-            currentOrderItems = [];
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Realizar Pedido - Sede ${db.currentSedetab} (${db.currentSection})</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        
-                        <div class="space-y-3">
-                            <label class="block text-xs font-semibold text-slate-400">Buscar Insumo</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="order-search" oninput="filterOrderItems()" placeholder="Buscar por código o nombre..." class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500">
-                            </div>
-                            <div id="order-search-results" class="space-y-2 max-h-48 overflow-y-auto border border-slate-700/60 p-2 rounded-xl bg-slate-900/50">
-                                ${inv.map(item => `
-                                    <div class="flex justify-between items-center p-2 hover:bg-slate-700/40 rounded-lg text-xs">
-                                        <div><span class="font-mono text-indigo-400 font-bold">${item.code}</span> - ${item.name}</div>
-                                        <div class="flex items-center gap-2">
-                                            <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-center">
-                                            <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold">Agregar</button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-
-                        <div class="pt-4 border-t border-slate-700">
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Insumos Seleccionados para el Pedido</h4>
-                            <div id="selected-order-list" class="space-y-2 max-h-40 overflow-y-auto">
-                                <p class="text-xs text-slate-500 italic">No hay insumos agregados aún.</p>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                            <button onclick="submitOrder()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-xl text-white transition">Enviar Pedido</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function filterOrderItems() {
-            const query = document.getElementById('order-search').value.toLowerCase();
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            const container = document.getElementById('order-search-results');
-            const filtered = inv.filter(i => i.code.toLowerCase().includes(query) || i.name.toLowerCase().includes(query));
-
-            container.innerHTML = filtered.map(item => `
-                <div class="flex justify-between items-center p-2 hover:bg-slate-700/40 rounded-lg text-xs">
-                    <div><span class="font-mono text-indigo-400 font-bold">${item.code}</span> - ${item.name}</div>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-center">
-                        <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold">Agregar</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function addOrderItemSelected(code, name) {
-            const qtyInput = document.getElementById(`qty-${code}`);
-            const qty = parseInt(qtyInput.value) || 1;
-
-            const existing = currentOrderItems.find(x => x.code === code);
-            if (existing) {
-                existing.qtyRequested += qty;
-            } else {
-                currentOrderItems.push({ code, name, qtyRequested: qty, qtyPending: qty, qtyReceived: 0 });
-            }
-
-            renderSelectedOrderList();
-        }
-
-        function renderSelectedOrderList() {
-            const container = document.getElementById('selected-order-list');
-            if (currentOrderItems.length === 0) {
-                container.innerHTML = `<p class="text-xs text-slate-500 italic">No hay insumos agregados aún.</p>`;
-                return;
-            }
-
-            container.innerHTML = currentOrderItems.map((item, idx) => `
-                <div class="flex justify-between items-center bg-slate-900 p-2.5 rounded-xl text-xs border border-slate-700">
-                    <div><span class="font-mono text-indigo-400 font-bold">${item.code}</span> - ${item.name}</div>
-                    <div class="flex items-center gap-3">
-                        <span class="bg-indigo-600/20 text-indigo-300 px-2.5 py-1 rounded-lg font-bold">${item.qtyRequested} solicitados</span>
-                        <button onclick="currentOrderItems.splice(${idx}, 1); renderSelectedOrderList()" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function submitOrder() {
-            if (currentOrderItems.length === 0) {
-                alert('Debe agregar al menos un insumo al pedido.');
-                return;
-            }
-
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0];
-            const timeStr = now.toTimeString().split(' ')[0];
-
-            const newOrder = {
-                id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
-                userName: db.currentUser.name,
-                sede: db.currentSedetab,
-                section: db.currentSection,
-                date: dateStr,
-                time: timeStr,
-                status: 'Pendiente',
-                items: JSON.parse(JSON.stringify(currentOrderItems))
-            };
-
-            db.orders.unshift(newOrder);
-            saveDB();
-            closeModal();
-            alert('¡Pedido realizado con éxito!');
-            render();
-        }
-
-        // --- DETALLE Y EXCEL DE PEDIDOS ---
+        // --- DETALLE Y RECEPCIÓN DE PEDIDOS ---
         function openOrderDetail(orderId) {
             const order = db.orders.find(o => o.id === orderId);
             if (!order) return;
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
                             <div>
-                                <span class="font-mono text-xs text-indigo-400 font-bold">${order.id}</span>
-                                <h3 class="text-lg font-bold">${order.userName} realizó pedido el ${order.date}</h3>
+                                <span class="font-mono text-xs text-indigo-600 font-bold">${order.id}</span>
+                                <h3 class="text-lg font-bold text-slate-800">${order.userName} realizó pedido el ${order.date}</h3>
                             </div>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
 
-                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 text-xs space-y-1">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-600">
                             <p><strong>Sede y Sección:</strong> Sede ${order.sede} (${order.section})</p>
                             <p><strong>Hora del Pedido:</strong> ${order.time}</p>
-                            <p><strong>Estado:</strong> <span class="${order.status === 'Completado' ? 'text-emerald-400' : 'text-amber-400'} font-bold">${order.status}</span></p>
+                            <p><strong>Estado:</strong> <span class="${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'} font-bold">${order.status}</span></p>
                         </div>
 
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Insumos Solicitados:</h4>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Insumos Solicitados:</h4>
                         <div class="space-y-2">
                             ${order.items.map(i => `
-                                <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center text-xs">
+                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
                                     <div>
-                                        <span class="font-mono text-indigo-400 font-bold">${i.code}</span>
-                                        <p class="font-semibold mt-0.5">${i.name}</p>
+                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
+                                        <p class="font-semibold text-slate-800 mt-0.5">${i.name}</p>
                                     </div>
                                     <div class="text-right">
-                                        <span class="bg-indigo-600/20 text-indigo-300 px-2.5 py-1 rounded-lg font-bold">${i.qtyRequested} solicitados</span>
-                                        ${i.qtyPending > 0 ? `<p class="text-amber-400 mt-1 font-semibold">Pendiente: ${i.qtyPending}</p>` : `<p class="text-emerald-400 mt-1 font-semibold">Completado</p>`}
+                                        <span class="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-bold">${i.qtyRequested} solicitados</span>
+                                        ${i.qtyPending > 0 ? `<p class="text-amber-600 mt-1 font-semibold">Pendiente: ${i.qtyPending}</p>` : `<p class="text-emerald-600 mt-1 font-semibold">Completado</p>`}
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-700">
-                            <button onclick="downloadSingleOrderExcel('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                            <button onclick="downloadSingleOrderExcel('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -745,39 +808,38 @@
             XLSX.writeFile(wb, `Pedido_${order.id}.xlsx`);
         }
 
-        // --- REGISTRAR LLEGADA DE PENDIENTES ---
         function openReceiveModal(orderId) {
             const order = db.orders.find(o => o.id === orderId);
             if (!order) return;
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Registrar Llegada de Pedido (${order.id})</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Registrar Llegada de Pedido (${order.id})</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-400">Ingresa la cantidad que llegó en esta entrega para actualizar los pendientes e inventario.</p>
+                        <p class="text-xs text-slate-500">Ingresa la cantidad que llegó en esta entrega para actualizar los pendientes e inventario.</p>
 
                         <div class="space-y-3">
                             ${order.items.map((i, idx) => `
-                                <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center text-xs">
+                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
                                     <div>
-                                        <span class="font-mono text-indigo-400 font-bold">${i.code}</span>
-                                        <p class="font-semibold">${i.name}</p>
+                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
+                                        <p class="font-semibold text-slate-800">${i.name}</p>
                                         <p class="text-slate-400 mt-0.5">Pendiente actual: ${i.qtyPending}</p>
                                     </div>
                                     <div>
-                                        <input type="number" id="incoming-${idx}" min="0" max="${i.qtyPending}" value="${i.qtyPending}" class="w-24 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-center font-bold text-sm">
+                                        <input type="number" id="incoming-${idx}" min="0" max="${i.qtyPending}" value="${i.qtyPending}" class="w-24 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-sm">
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                            <button onclick="saveIncomingShipment('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-xl text-white transition">Guardar Recepción</button>
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                            <button onclick="saveIncomingShipment('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition">Guardar Recepción</button>
                         </div>
                     </div>
                 </div>
@@ -789,32 +851,23 @@
             if (!order) return;
 
             order.items.forEach((i, idx) => {
-                const incomingInput = document.getElementById(`incoming-${idx}`);
-                const incomingVal = parseInt(incomingInput.value) || 0;
-
+                const incomingVal = parseInt(document.getElementById(`incoming-${idx}`).value) || 0;
                 if (incomingVal > 0) {
                     i.qtyPending = Math.max(0, i.qtyPending - incomingVal);
                     const invList = db.inventory[order.sede][order.section];
                     const prod = invList.find(p => p.code === i.code);
-                    if (prod) {
-                        prod.qty += incomingVal;
-                    }
+                    if (prod) prod.qty += incomingVal;
                 }
             });
 
-            if (order.items.every(i => i.qtyPending === 0)) {
-                order.status = 'Completado';
-            } else {
-                order.status = 'Pendiente Parcial';
-            }
-
+            order.status = order.items.every(i => i.qtyPending === 0) ? 'Completado' : 'Pendiente Parcial';
             saveDB();
             closeModal();
             alert('¡Recepción registrada e inventario actualizado con éxito!');
             render();
         }
 
-        // --- MODALES DE ESTADÍSTICAS ADMIN ---
+        // --- MODALES DE REPORTES ADMIN ---
         function openTotalOrdersModal() {
             const monthsMap = {};
             db.orders.forEach(o => {
@@ -825,26 +878,26 @@
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Total Pedidos Realizados (Por Mes)</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Total Pedidos Realizados (Por Mes)</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-400">Selecciona un mes para ver las órdenes ordenadas de la más reciente a la más antigua.</p>
+                        <p class="text-xs text-slate-500">Selecciona un mes para ver las órdenes ordenadas de la más reciente a la más antigua.</p>
 
                         <div class="space-y-3">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">No hay pedidos registrados.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
-                                <div class="bg-slate-900 border border-slate-700 p-4 rounded-xl">
-                                    <h4 class="font-bold text-sm text-indigo-400 mb-2">📅 Mes: ${m} (${monthsMap[m].length} órdenes)</h4>
+                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay pedidos registrados.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
+                                <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl">
+                                    <h4 class="font-bold text-sm text-indigo-600 mb-2">📅 Mes: ${m} (${monthsMap[m].length} órdenes)</h4>
                                     <div class="space-y-2">
                                         ${monthsMap[m].sort((a,b) => new Date(b.date + ' ' + b.time) - new Date(a.date + ' ' + a.time)).map(o => `
-                                            <div class="flex justify-between items-center bg-slate-800 p-3 rounded-lg text-xs">
+                                            <div class="flex justify-between items-center bg-white p-3 rounded-lg text-xs border border-slate-100">
                                                 <div>
-                                                    <span class="font-mono text-indigo-400 font-bold">${o.id}</span>
-                                                    <p class="font-semibold">${o.userName} - ${o.date} (${o.sede})</p>
+                                                    <span class="font-mono text-indigo-600 font-bold">${o.id}</span>
+                                                    <p class="font-semibold text-slate-800">${o.userName} - ${o.date} (${o.sede})</p>
                                                 </div>
-                                                <button onclick="closeModal(); openOrderDetail('${o.id}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold">Ver insumos ></button>
+                                                <button onclick="closeModal(); openOrderDetail('${o.id}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold">Ver insumos ></button>
                                             </div>
                                         `).join('')}
                                     </div>
@@ -852,8 +905,8 @@
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-end pt-4 border-t border-slate-700">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex justify-end pt-4 border-t border-slate-200">
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -870,25 +923,25 @@
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Promedio y Detalle Mensual</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Promedio y Detalle Mensual</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-400">Haz clic en un mes para ver el detalle de los insumos solicitados y descargar su Excel (.xlsx).</p>
+                        <p class="text-xs text-slate-500">Haz clic en un mes para ver el detalle de los insumos solicitados y descargar su Excel (.xlsx).</p>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-500 col-span-2 text-center py-4">No hay datos mensuales.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
-                                <div onclick="openMonthDetailModal('${m}')" class="bg-slate-900 border border-slate-700 hover:border-indigo-500 p-4 rounded-xl cursor-pointer transition">
-                                    <h4 class="font-bold text-sm text-indigo-400 mb-1">📅 ${m}</h4>
-                                    <p class="text-xs text-slate-400">${monthsMap[m].length} pedidos realizados</p>
+                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 col-span-2 text-center py-4">No hay datos mensuales.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
+                                <div onclick="openMonthDetailModal('${m}')" class="bg-slate-50 border border-slate-200 hover:border-indigo-600 p-4 rounded-xl cursor-pointer transition">
+                                    <h4 class="font-bold text-sm text-indigo-600 mb-1">📅 ${m}</h4>
+                                    <p class="text-xs text-slate-500">${monthsMap[m].length} pedidos realizados</p>
                                 </div>
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-end pt-4 border-t border-slate-700">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex justify-end pt-4 border-t border-slate-200">
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -900,9 +953,7 @@
             const aggregated = {};
             ordersInMonth.forEach(o => {
                 o.items.forEach(i => {
-                    if (!aggregated[i.code]) {
-                        aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
-                    }
+                    if (!aggregated[i.code]) aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
                     aggregated[i.code].totalQty += i.qtyRequested;
                     aggregated[i.code].requestsCount += 1;
                 });
@@ -912,31 +963,31 @@
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Detalle del Mes: ${monthStr}</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Detalle del Mes: ${monthStr}</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
 
                         <div class="space-y-2">
-                            ${itemsArray.length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">No hay insumos en este mes.</p>` : itemsArray.map(i => `
-                                <div class="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center text-xs">
+                            ${itemsArray.length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay insumos en este mes.</p>` : itemsArray.map(i => `
+                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
                                     <div>
-                                        <span class="font-mono text-indigo-400 font-bold">${i.code}</span>
-                                        <p class="font-semibold">${i.name}</p>
+                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
+                                        <p class="font-semibold text-slate-800">${i.name}</p>
                                     </div>
                                     <div class="text-right">
-                                        <span class="bg-emerald-600/20 text-emerald-300 px-2.5 py-1 rounded-lg font-bold">${i.totalQty} solicitados</span>
+                                        <span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg font-bold">${i.totalQty} solicitados</span>
                                         <p class="text-slate-400 mt-1">(${i.requestsCount} veces pedido)</p>
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-700">
-                            <button onclick="downloadMonthExcel('${monthStr}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                            <button onclick="downloadMonthExcel('${monthStr}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -948,9 +999,7 @@
             const aggregated = {};
             ordersInMonth.forEach(o => {
                 o.items.forEach(i => {
-                    if (!aggregated[i.code]) {
-                        aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
-                    }
+                    if (!aggregated[i.code]) aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
                     aggregated[i.code].totalQty += i.qtyRequested;
                     aggregated[i.code].requestsCount += 1;
                 });
@@ -979,16 +1028,16 @@
 
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Relacionado Anual y por Meses</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Relacionado Anual y por Meses</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-400">Desglose mensual y acumulado anual de los insumos solicitados.</p>
+                        <p class="text-xs text-slate-500">Desglose mensual y acumulado anual de los insumos solicitados.</p>
 
                         <div class="space-y-4">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-500 text-center py-4">No hay pedidos registrados este año.</p>` : Object.keys(monthsMap).sort().reverse().map(m => {
+                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay pedidos registrados este año.</p>` : Object.keys(monthsMap).sort().reverse().map(m => {
                                 const agg = {};
                                 monthsMap[m].forEach(o => {
                                     o.items.forEach(i => {
@@ -997,12 +1046,12 @@
                                     });
                                 });
                                 return `
-                                    <div class="bg-slate-900 border border-slate-700 p-4 rounded-xl space-y-2">
-                                        <h4 class="font-bold text-sm text-indigo-400">📅 Mes: ${m}</h4>
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                                        <h4 class="font-bold text-sm text-indigo-600">📅 Mes: ${m}</h4>
                                         <div class="space-y-1">
                                             ${Object.keys(agg).map(code => `
-                                                <div class="flex justify-between text-xs bg-slate-800 p-2 rounded">
-                                                    <span><strong class="text-indigo-300">${code}</strong> - ${agg[code].name}</span>
+                                                <div class="flex justify-between text-xs bg-white p-2 rounded border border-slate-100">
+                                                    <span><strong class="text-indigo-600">${code}</strong> - ${agg[code].name}</span>
                                                     <span class="font-bold">${agg[code].qty} unidades</span>
                                                 </div>
                                             `).join('')}
@@ -1012,9 +1061,9 @@
                             }).join('')}
                         </div>
 
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-700">
-                            <button onclick="downloadAnnualExcel()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Relacionado Anual (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
+                            <button onclick="downloadAnnualExcel()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Relacionado Anual (.xlsx)</button>
+                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -1041,24 +1090,23 @@
             XLSX.writeFile(wb, "Relacion_Anual_Insumos.xlsx");
         }
 
-        // --- CAMBIAR CONTRASEÑA ADMIN ---
         function openChangePasswordModal() {
             const container = document.getElementById('modal-container');
             container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl w-full max-w-md space-y-4">
+                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
                         <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Cambiar Contraseña de Administrador</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                            <h3 class="text-lg font-bold text-slate-800">Cambiar Contraseña de Administrador</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
                         <form onsubmit="saveNewPassword(event)" class="space-y-4">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-400 mb-1">Nueva Contraseña</label>
-                                <input type="password" id="new-admin-pass" required class="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm focus:outline-none focus:border-indigo-500" placeholder="Nueva contraseña">
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nueva Contraseña</label>
+                                <input type="password" id="new-admin-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600" placeholder="Nueva contraseña">
                             </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-700">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold rounded-xl text-white transition">Actualizar Contraseña</button>
+                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Actualizar Contraseña</button>
                             </div>
                         </form>
                     </div>
