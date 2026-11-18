@@ -40,7 +40,7 @@ async function syncOrderToCloud(orderData) {
         await fetch(WEB_APP_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({
                 action: 'saveOrder',
                 ...orderData
@@ -50,6 +50,40 @@ async function syncOrderToCloud(orderData) {
     } catch (err) {
         console.error("Error al sincronizar con la nube:", err);
         showToast('Guardado localmente en este dispositivo.', 'info');
+    }
+}
+
+async function syncInventoryToCloud() {
+    try {
+        let allItems = [];
+        ['ICV', 'CIE'].forEach(loc => {
+            ['hospitalarios', 'comercializadora'].forEach(sec => {
+                if (state.inventory[loc] && state.inventory[loc][sec]) {
+                    state.inventory[loc][sec].forEach(item => {
+                        allItems.push({
+                            location: loc,
+                            section: sec,
+                            code: item.code,
+                            name: item.name,
+                            quantity: item.quantity,
+                            minStock: item.minStock
+                        });
+                    });
+                }
+            });
+        });
+
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                action: 'saveInventory',
+                items: allItems
+            })
+        });
+    } catch (err) {
+        console.error("Error sincronizando inventario:", err);
     }
 }
         // Función para aplanar y subir todo el inventario actual de ICV y CIE a la nube
@@ -193,12 +227,30 @@ function loadState() {
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-            return JSON.parse(saved);
+            const parsed = JSON.parse(saved);
+            return {
+                ...defaultState,
+                ...parsed,
+                inventory: {
+                    ICV: {
+                        hospitalarios: parsed?.inventory?.ICV?.hospitalarios || defaultState.inventory.ICV.hospitalarios,
+                        comercializadora: parsed?.inventory?.ICV?.comercializadora || defaultState.inventory.ICV.comercializadora
+                    },
+                    CIE: {
+                        hospitalarios: parsed?.inventory?.CIE?.hospitalarios || defaultState.inventory.CIE.hospitalarios,
+                        comercializadora: parsed?.inventory?.CIE?.comercializadora || defaultState.inventory.CIE.comercializadora
+                    }
+                },
+                orders: Array.isArray(parsed?.orders) ? parsed.orders : [],
+                notifications: Array.isArray(parsed?.notifications) ? parsed.notifications : [],
+                cart: Array.isArray(parsed?.cart) ? parsed.cart : []
+            };
         }
     } catch (e) {
-        console.error("Error cargando estado local:", e);
+        console.error("Error cargando estado local, restaurando valores por defecto:", e);
+        localStorage.removeItem(STORAGE_KEY);
     }
-    return defaultState; 
+    return defaultState;
 }
 
 // ÚNICA declaración de state
