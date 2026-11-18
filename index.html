@@ -33,7 +33,7 @@
     <script>
         // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
 
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyYd2Mng_OZePWHNw3FVMMH8F8oOQHLxASzuDZgzDw85lDNpmo68FGB20S4MArUb42m6A/exec';
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6ez94fge8ECezrydn7HG1Ne0_j4y1j_TrNXHv6OnK3wPGKosHk6lXWu-VWKG1cdbyg/exec';
 
 async function syncOrderToCloud(orderData) {
     try {
@@ -52,6 +52,98 @@ async function syncOrderToCloud(orderData) {
         showToast('Guardado localmente en este dispositivo.', 'info');
     }
 }
+        // Función para aplanar y subir todo el inventario actual de ICV y CIE a la nube
+async function syncInventoryToCloud() {
+    try {
+        let allItems = [];
+        // Recorrer sedes y secciones para unificar el inventario en un solo array
+        ['ICV', 'CIE'].forEach(loc => {
+            ['hospitalarios', 'comercializadora'].forEach(sec => {
+                if (state.inventory[loc] && state.inventory[loc][sec]) {
+                    state.inventory[loc][sec].forEach(item => {
+                        allItems.push({
+                            location: loc,
+                            section: sec,
+                            code: item.code,
+                            name: item.name,
+                            quantity: item.quantity,
+                            minStock: item.minStock
+                        });
+                    });
+                }
+            });
+        });
+
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'saveInventory',
+                items: allItems
+            })
+        });
+    } catch (err) {
+        console.error("Error sincronizando inventario:", err);
+    }
+}
+
+// Función para descargar el inventario y los pedidos frescos al abrir la app en cualquier dispositivo
+async function sincronizarDesdeGoogleSheets() {
+    try {
+        const response = await fetch(`${WEB_APP_URL}?action=getData`);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            // Sincronizar Pedidos
+            if (result.orders && result.orders.length > 0) {
+                // Mapear los pedidos de la nube al formato de la app
+                state.orders = result.orders.map(o => ({
+                    id: o.id,
+                    location: o.location,
+                    section: o.section,
+                    userName: o.userName,
+                    date: o.date,
+                    time: o.time,
+                    status: o.status,
+                    items: o.itemsText ? o.itemsText.split(' | ').map(str => {
+                        // Reconstruir el objeto de ítem básico
+                        return { code: str.split(' - ')[0], name: str.split(' - ')[1]?.split(' (Cant:')[0] || '', orderedQty: parseInt(str.split('Cant: ')[1]) || 1, deliveredQty: 0, pendingQty: 0 };
+                    }) : []
+                }));
+            }
+
+            // Sincronizar Inventario si la nube tiene datos registrados
+            if (result.inventory && result.inventory.length > 0) {
+                // Reiniciar estructura local antes de poblar con la nube
+                let cloudInventory = {
+                    ICV: { hospitalarios: [], comercializadora: [] },
+                    CIE: { hospitalarios: [], comercializadora: [] }
+                };
+
+                result.inventory.forEach(i => {
+                    if (cloudInventory[i.location] && cloudInventory[i.location][i.section]) {
+                        cloudInventory[i.location][i.section].push({
+                            code: i.code,
+                            name: i.name,
+                            quantity: i.quantity,
+                            minStock: i.minStock
+                        });
+                    }
+                });
+
+                state.inventory = cloudInventory;
+            }
+
+            saveState();
+            syncInventoryToCloud();
+            render();
+        }
+    } catch (err) {
+        console.error("Modo offline o error al descargar de Google Sheets:", err);
+    }
+}
+        
         const STORAGE_KEY = 'icv_cie_inventory_system_v5';
 
         let defaultState = {
@@ -1855,9 +1947,10 @@ async function syncOrderToCloud(orderData) {
         }
 
         // --- INIT ON LOAD ---
-        window.onload = function() {
-            render();
-        }
+       window.onload = async function() {
+    await sincronizarDesdeGoogleSheets(); // Descarga pedidos e inventario fresco de la nube
+    render();
+}
     </script>
 </body>
 </html>
