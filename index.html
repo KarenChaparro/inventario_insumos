@@ -3,163 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICV & CIE Insumos - Sistema de Control</title>
+    <title>Sistema Integral de Inventarios ICV & CIE</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- SheetJS (xlsx) para exportar e importar archivos Excel -->
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS para Carga Masiva y Exportación Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
-    <!-- CONTENEDOR PRINCIPAL -->
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN APP CONTAINER -->
     <div id="app" class="flex-1 flex flex-col">
-        <!-- Renderizado dinámico -->
+        <!-- Rendered dynamically via JS -->
     </div>
 
-    <!-- MODALES -->
+    <!-- MODALS CONTAINER -->
     <div id="modal-container"></div>
 
+    <!-- APPLICATION JAVASCRIPT -->
     <script>
-        // --- BASE DE DATOS Y ESTADO ---
-        let db = JSON.parse(localStorage.getItem('icv_cie_db_v4')) || {
+        // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
+        const STORAGE_KEY = 'icv_cie_inventory_system_v5';
+
+        let defaultState = {
+            currentUser: null, 
+            currentLocation: 'ICV', // 'ICV' or 'CIE'
+            currentSection: 'hospitalarios', // 'hospitalarios' or 'comercializadora'
+            currentTab: 'inventario', // 'inventario' | 'pedido' | 'seguimiento' | 'reportes'
             users: [
-                { name: 'Lindsay Velasco', doc: '27984352', pass: 'admin', role: 'admin' }
+                { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' }
             ],
-            currentSedetab: 'ICV', // 'ICV' o 'CIE'
-            currentSection: 'hospitalarios', // 'hospitalarios' o 'comercializadora'
-            currentTab: 'inventario', // 'inventario', 'pedido', 'recepcion', 'reportes'
-            currentUser: null,
-            orders: [],
             inventory: {
                 ICV: {
                     hospitalarios: [
-                        { code: 'HOS-001', name: 'Sábanas Planas Blancas', qty: 250 },
-                        { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', qty: 120 },
-                        { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', qty: 400 }
+                        { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
+                        { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
+                        { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
                     ],
                     comercializadora: [
-                        { code: 'COM-001', name: 'Kits de Aseo Institucional', qty: 85 },
-                        { code: 'COM-002', name: 'Termos Metálicos Marcados', qty: 60 }
+                        { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
+                        { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
                     ]
                 },
                 CIE: {
                     hospitalarios: [
-                        { code: 'CIE-H01', name: 'Tapabocas N95 (Caja x 50)', qty: 300 },
-                        { code: 'CIE-H02', name: 'Solución Salina 500ml', qty: 150 }
+                        { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
+                        { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
                     ],
                     comercializadora: [
-                        { code: 'CIE-C01', name: 'Llantas / Insumos Logística', qty: 30 }
+                        { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
+                        { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
                     ]
                 }
-            }
+            },
+            orders: [], 
+            notifications: [], 
+            cart: []
         };
 
-        function saveDB() {
-            localStorage.setItem('icv_cie_db_v4', JSON.stringify(db));
+        let state = loadState();
+
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    let mergedState = { ...defaultState, ...parsed };
+                    if (!mergedState.users.some(u => u.document === '27984352')) {
+                        mergedState.users.unshift({ name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' });
+                    }
+                    return mergedState;
+                } catch(e) {
+                    console.error("Error loading state", e);
+                }
+            }
+            return defaultState;
         }
 
-        window.onload = function() {
-            render();
-        };
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
 
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if(!container) return;
+            const toast = document.createElement('div');
+            const bgColors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-rose-600 text-white',
+                info: 'bg-blue-600 text-white'
+            };
+            toast.className = `px-4 py-3 rounded-xl shadow-lg font-medium text-sm flex items-center gap-3 transition transform translate-y-2 opacity-0 pointer-events-auto ${bgColors[type] || bgColors.success}`;
+            
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+
+            toast.innerHTML = `<i class="fa-solid ${icons[type]} text-lg"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // --- RENDER ROUTER ---
         function render() {
             const app = document.getElementById('app');
-            if (!db.currentUser) {
-                app.innerHTML = renderLogin();
+            if (!state.currentUser) {
+                app.innerHTML = renderAuthScreen();
             } else {
-                app.innerHTML = renderDashboard();
+                app.innerHTML = renderMainDashboard();
             }
         }
 
-        // --- AUTENTICACIÓN ---
-        let authMode = 'login';
+        // --- AUTH SCREEN ---
+        let authMode = 'login'; // 'login' or 'register'
 
-        function renderLogin() {
+        function renderAuthScreen() {
             return `
-                <div class="flex-1 flex items-center justify-center p-4 bg-slate-100">
-                    <div class="bg-white border border-slate-200 p-8 rounded-2xl shadow-xl w-full max-w-md">
+                <div class="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+                    <div class="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl w-full max-w-md p-8 border border-white/20">
                         <div class="text-center mb-8">
-                            <div class="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-600/30">
-                                <i class="fa-solid fa-boxes-stacked text-2xl text-white"></i>
+                            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white text-2xl shadow-lg mb-4">
+                                <i class="fa-solid fa-boxes-stacked"></i>
                             </div>
-                            <h1 class="text-2xl font-bold tracking-tight text-slate-900">ICV & CIE Insumos</h1>
-                            <p class="text-xs text-slate-500 mt-1">Sistema de Control de Inventarios y Pedidos</p>
+                            <h1 class="text-2xl font-bold text-slate-900">ICV & CIE Insumos</h1>
+                            <p class="text-slate-500 text-sm mt-1">Sistema de Control de Inventarios y Pedidos</p>
                         </div>
 
-                        <div class="flex bg-slate-100 p-1 rounded-xl mb-6 border border-slate-200">
-                            <button onclick="authMode='login'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}">Iniciar Sesión</button>
-                            <button onclick="authMode='register'; render()" class="flex-1 py-2 text-xs font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}">Registrarse</button>
+                        <!-- Tabs -->
+                        <div class="flex rounded-xl bg-slate-100 p-1 mb-6">
+                            <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Iniciar Sesión</button>
+                            <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Registrarse</button>
                         </div>
 
-                        ${authMode === 'login' ? `
-                            <form onsubmit="handleLogin(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">USUARIO O DOCUMENTO</label>
-                                    <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user"></i></span>
-                                        <input type="text" id="login-user" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="usuario o Documento">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
-                                    <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
-                                        <input type="password" id="login-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="••••••••">
-                                    </div>
-                                </div>
-                                <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
-                                    Entrar al Sistema
-                                </button>
-                            </form>
-                        ` : `
-                            <form onsubmit="handleRegister(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre Completo</label>
-                                    <input type="text" id="reg-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="Tu nombre">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Número de Documento</label>
-                                    <input type="text" id="reg-doc" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="Número de documento">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
-                                    <input type="password" id="reg-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600" placeholder="••••••••">
-                                </div>
-                                <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
-                                    Registrarse
-                                </button>
-                            </form>
-                        `}
+                        ${authMode === 'login' ? renderLoginForm() : renderRegisterForm()}
                     </div>
                 </div>
             `;
         }
 
+        function renderLoginForm() {
+            return `
+                <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Usuario o Documento</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user"></i></span>
+                            <input type="text" id="login-id" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Usuario o Documento">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
+                            <input type="password" id="login-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="••••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                        Entrar al Sistema
+                    </button>
+                </form>
+            `;
+        }
+
+        function renderRegisterForm() {
+            return `
+                <form id="register-form" onsubmit="handleRegister(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre Completo</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-user"></i></span>
+                            <input type="text" id="reg-name" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Tu Nombre">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Documento de Identidad</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-id-card"></i></span>
+                            <input type="text" id="reg-doc" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="Ej. 10987654">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Contraseña</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400"><i class="fa-solid fa-lock"></i></span>
+                            <input type="password" id="reg-pass" required class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition" placeholder="••••••••">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
+                        Registrarme
+                    </button>
+                </form>
+            `;
+        }
+
+        function setAuthMode(mode) {
+            authMode = mode;
+            render();
+        }
+
         function handleLogin(e) {
             e.preventDefault();
-            const u = document.getElementById('login-user').value.trim();
-            const p = document.getElementById('login-pass').value.trim();
+            const inputId = document.getElementById('login-id').value.trim().toLowerCase();
+            const pass = document.getElementById('login-pass').value.trim();
 
-            if ((u.toLowerCase() === 'lindsayvelasco' || u === '27984352') && p === 'admin') {
-                db.currentUser = { name: 'Lindsay Velasco', role: 'admin', doc: '27984352' };
-                saveDB();
+            if (inputId === '27984352' && pass === 'admin') {
+                let adminUser = state.users.find(u => u.document === '27984352');
+                if (!adminUser) {
+                    adminUser = { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' };
+                    state.users.push(adminUser);
+                }
+                state.currentUser = adminUser;
+                saveState();
+                showToast(`¡Bienvenida de nuevo, ${adminUser.name}!`);
                 render();
                 return;
             }
 
-            const found = db.users.find(x => (x.name.toLowerCase() === u.toLowerCase() || x.doc === u) && x.pass === p);
+            const found = state.users.find(u => {
+                const matchDoc = u.document && u.document.toLowerCase() === inputId;
+                const matchUser = u.username && u.username.toLowerCase() === inputId;
+                return (matchDoc || matchUser) && u.password === pass;
+            });
+
             if (found) {
-                db.currentUser = found;
-                saveDB();
+                state.currentUser = found;
+                saveState();
+                showToast(`¡Bienvenido de nuevo, ${found.name}!`);
                 render();
             } else {
-                alert('Usuario o contraseña incorrectos.');
+                showToast('Usuario/Documento o contraseña incorrectos.', 'error');
             }
         }
 
@@ -169,913 +261,1179 @@
             const doc = document.getElementById('reg-doc').value.trim();
             const pass = document.getElementById('reg-pass').value.trim();
 
-            if (db.users.some(x => x.doc === doc)) {
-                alert('Ya existe un usuario registrado con este número de documento.');
+            if (state.users.some(u => u.document === doc)) {
+                showToast('Ya existe un usuario registrado con este documento.', 'error');
                 return;
             }
 
-            const newUser = { name, doc, pass, role: 'user' };
-            db.users.push(newUser);
-            db.currentUser = newUser;
-            saveDB();
-            alert('¡Usuario registrado con éxito!');
+            const newUser = { name, username: name.toLowerCase().replace(/\s+/g, ''), document: doc, password: pass, role: 'user' };
+            state.users.push(newUser);
+            state.currentUser = newUser;
+            saveState();
+            showToast('¡Registro exitoso! Sesión iniciada.');
             render();
         }
 
         function logout() {
-            db.currentUser = null;
-            saveDB();
+            state.currentUser = null;
+            saveState();
+            showToast('Sesión cerrada correctamente.', 'info');
             render();
         }
 
-        // --- DASHBOARD PRINCIPAL CON DISEÑO ORIGINAL CENTRADO ---
-        function renderDashboard() {
-            const isAdmin = db.currentUser.role === 'admin';
+        // --- MAIN DASHBOARD ---
+        function renderMainDashboard() {
+            const isAdmin = state.currentUser.role === 'admin';
+            const unreadNotifs = state.notifications.filter(n => !n.read).length;
 
             return `
-                <!-- Navbar Superior -->
-                <header class="bg-white border-b border-slate-200 px-8 py-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
-                    <div class="flex items-center space-x-3">
-                        <div class="bg-indigo-600 text-white p-2.5 rounded-xl font-bold shadow-md shadow-indigo-600/20"><i class="fa-solid fa-boxes-stacked"></i></div>
-                        <div>
-                            <h2 class="font-bold text-slate-900 text-base">ICV & CIE Insumos</h2>
-                            <p class="text-xs text-slate-500">Gestión Multisede</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center space-x-3">
-                        ${isAdmin ? `<button onclick="openChangePasswordModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center"><i class="fa-solid fa-key mr-1.5"></i> Cambiar Contraseña</button>` : ''}
-                        <div class="flex items-center space-x-2.5 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200">
-                            <i class="fa-solid fa-user-shield text-indigo-600"></i>
-                            <div class="text-xs">
-                                <p class="font-bold text-slate-800">${db.currentUser.name}</p>
-                                <p class="text-[10px] text-slate-500 uppercase font-semibold">${isAdmin ? 'Administrador' : 'Usuario'}</p>
+                <!-- Top Navbar -->
+                <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-600/20">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <div>
+                                <h1 class="font-bold text-slate-800 text-base leading-tight">ICV & CIE Insumos</h1>
+                                <span class="text-xs text-slate-500 font-medium">Gestión Multisede</span>
                             </div>
                         </div>
-                        <button onclick="logout()" class="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition shadow-sm" title="Cerrar Sesión"><i class="fa-solid fa-power-off"></i></button>
+
+                        <div class="flex items-center gap-3">
+                            ${isAdmin ? `
+                            <button onclick="openChangePasswordModal()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold transition">
+                                <i class="fa-solid fa-key"></i> Cambiar Contraseña
+                            </button>
+                            ` : ''}
+
+                            <!-- User Badge -->
+                            <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl">
+                                <div class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-xs">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <div class="text-xs">
+                                    <p class="font-bold text-slate-700">${state.currentUser.name}</p>
+                                    <p class="text-slate-500 uppercase tracking-wider text-[10px]">${isAdmin ? 'Administrador (27984352)' : 'Usuario Normal'}</p>
+                                </div>
+                            </div>
+
+                            <!-- Logout Button -->
+                            <button onclick="logout()" title="Cerrar Sesión" class="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 transition">
+                                <i class="fa-solid fa-power-off"></i>
+                            </button>
+                        </div>
                     </div>
                 </header>
 
-                <!-- Barra de Sede y Sección (Diseño Original Centrado) -->
-                <div class="bg-indigo-900 text-white px-8 py-3.5 flex flex-wrap justify-between items-center gap-4 shadow-md">
-                    <div class="flex items-center space-x-4">
-                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SEDE:</span>
-                        <div class="flex space-x-2">
-                            <button onclick="setSede('ICV')" class="px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm ${db.currentSedetab === 'ICV' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede ICV</button>
-                            <button onclick="setSede('CIE')" class="px-5 py-2 rounded-xl text-xs font-bold transition shadow-sm ${db.currentSedetab === 'CIE' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">Sede CIE</button>
+                <!-- Sub-Header Sede & Seccion Bar -->
+                <div class="bg-indigo-900 text-white shadow-inner">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <!-- Sede Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sede:</span>
+                            <button onclick="switchLocation('ICV')" class="px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${state.currentLocation === 'ICV' ? 'bg-white text-indigo-950' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-hospital mr-1.5"></i> Sede ICV
+                            </button>
+                            <button onclick="switchLocation('CIE')" class="px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${state.currentLocation === 'CIE' ? 'bg-white text-indigo-950' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-building-shield mr-1.5"></i> Sede CIE
+                            </button>
                         </div>
-                    </div>
 
-                    <div class="flex items-center space-x-4">
-                        <span class="text-xs font-bold uppercase tracking-wider text-indigo-200">SECCIÓN:</span>
-                        <div class="flex space-x-2">
-                            <button onclick="setSection('hospitalarios')" class="px-4 py-2 rounded-xl text-xs font-semibold transition shadow-sm ${db.currentSection === 'hospitalarios' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-hospital mr-1.5"></i> Productos Hospitalarios</button>
-                            <button onclick="setSection('comercializadora')" class="px-4 py-2 rounded-xl text-xs font-semibold transition shadow-sm ${db.currentSection === 'comercializadora' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}"><i class="fa-solid fa-store mr-1.5"></i> Comercializadora</button>
+                        <!-- Seccion Toggle -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sección:</span>
+                            <button onclick="switchSection('hospitalarios')" class="px-3.5 py-2 rounded-xl text-xs font-semibold transition ${state.currentSection === 'hospitalarios' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-800/60 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-kit-medical mr-1"></i> Productos Hospitalarios
+                            </button>
+                            <button onclick="switchSection('comercializadora')" class="px-3.5 py-2 rounded-xl text-xs font-semibold transition ${state.currentSection === 'comercializadora' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-800/60 text-indigo-200 hover:bg-indigo-700'}">
+                                <i class="fa-solid fa-store mr-1"></i> Comercializadora
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Pestañas Principales (Navbar Interna Estilo Imagen 2) -->
-                <div class="bg-white border-b border-slate-200 px-8 flex space-x-8 shadow-sm">
-                    <button onclick="setTab('inventario')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
-                        <i class="fa-solid fa-warehouse"></i><span>Inventario Actual</span>
-                    </button>
-                    <button onclick="setTab('pedido')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
-                        <i class="fa-solid fa-cart-shopping"></i><span>Realizar Pedido</span>
-                    </button>
-                    <button onclick="setTab('recepcion')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'recepcion' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
-                        <i class="fa-solid fa-truck-ramp-box"></i><span>Recepción y Pendientes</span>
-                    </button>
-                    ${isAdmin ? `
-                        <button onclick="setTab('reportes')" class="py-4 border-b-2 text-xs font-bold transition flex items-center space-x-2 ${db.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
-                            <i class="fa-solid fa-chart-pie"></i><span>Panel Admin & Reportes</span>
+                <!-- Navigation Tabs -->
+                <div class="bg-white border-b border-slate-200 shadow-sm">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto">
+                        <button onclick="switchTab('inventario')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-boxes-column"></i> Inventario Actual
                         </button>
-                    ` : ''}
+                        <button onclick="switchTab('pedido')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'pedido' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-cart-plus"></i> Realizar Pedido
+                        </button>
+                        <button onclick="switchTab('seguimiento')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'seguimiento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-clipboard-check"></i> Recepción y Pendientes
+                        </button>
+                        ${isAdmin ? `
+                        <button onclick="switchTab('reportes')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition relative ${state.currentTab === 'reportes' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+                            <i class="fa-solid fa-chart-line"></i> Panel Admin & Reportes
+                            ${unreadNotifs > 0 ? `<span class="ml-1 px-1.5 py-0.5 bg-rose-600 text-white rounded-full text-[10px]">${unreadNotifs}</span>` : ''}
+                        </button>
+                        ` : ''}
+                    </div>
                 </div>
 
-                <!-- CONTENEDOR CENTRADO Y ORGANIZADO -->
-                <div class="flex-1 p-8 max-w-7xl mx-auto w-full space-y-6">
-                    ${db.currentTab === 'inventario' ? renderInventoryTab() : ''}
-                    ${db.currentTab === 'pedido' ? renderOrderTab() : ''}
-                    ${db.currentTab === 'recepcion' ? renderReceptionTab() : ''}
-                    ${db.currentTab === 'reportes' && isAdmin ? renderReportsTab() : ''}
+                <!-- Content Body -->
+                <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="p-3 bg-indigo-600 text-white rounded-xl">
+                                <i class="fa-solid fa-location-dot"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800">Vista Actual: Sede <span class="text-indigo-600">${state.currentLocation}</span> / Sección <span class="text-indigo-600 uppercase">${state.currentSection}</span></h3>
+                                <p class="text-xs text-slate-500">Los datos mostrados corresponden exclusivamente a esta selección y sede.</p>
+                            </div>
+                        </div>
+                        <div class="text-xs font-semibold bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 shadow-sm">
+                            Usuario: ${state.currentUser.name}
+                        </div>
+                    </div>
+
+                    ${renderTabContent()}
+                </main>
+            `;
+        }
+
+        function switchLocation(loc) {
+            state.currentLocation = loc;
+            saveState();
+            render();
+        }
+
+        function switchSection(sec) {
+            state.currentSection = sec;
+            saveState();
+            render();
+        }
+
+        function switchTab(tab) {
+            state.currentTab = tab;
+            if(tab === 'reportes' && state.currentUser.role === 'admin') {
+                state.notifications.forEach(n => n.read = true);
+                saveState();
+            }
+            render();
+        }
+
+        function renderTabContent() {
+            switch(state.currentTab) {
+                case 'inventario': return renderInventoryTab();
+                case 'pedido': return renderOrderTab();
+                case 'seguimiento': return renderTrackingTab();
+                case 'reportes': return renderReportsTab();
+                default: return renderInventoryTab();
+            }
+        }
+
+        // --- PASSWORD CHANGE MODAL (ADMIN) ---
+        function openChangePasswordModal() {
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg text-slate-800">Cambiar Contraseña de Administrador</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <form onsubmit="handlePasswordChange(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nueva Contraseña</label>
+                                <input type="password" id="new-admin-pass" required placeholder="••••••••" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Confirmar Nueva Contraseña</label>
+                                <input type="password" id="confirm-admin-pass" required placeholder="••••••••" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div class="flex items-center justify-end gap-3 mt-6">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition">Actualizar Contraseña</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             `;
         }
 
-        function setSede(sede) {
-            db.currentSedetab = sede;
-            saveDB();
-            render();
+        function handlePasswordChange(e) {
+            e.preventDefault();
+            const p1 = document.getElementById('new-admin-pass').value.trim();
+            const p2 = document.getElementById('confirm-admin-pass').value.trim();
+
+            if (p1 !== p2) {
+                showToast('Las contraseñas no coinciden.', 'error');
+                return;
+            }
+
+            state.currentUser.password = p1;
+            const userInList = state.users.find(u => u.document === state.currentUser.document);
+            if (userInList) {
+                userInList.password = p1;
+            }
+
+            saveState();
+            closeModal();
+            showToast('¡Contraseña de administrador actualizada con éxito!');
         }
 
-        function setSection(sec) {
-            db.currentSection = sec;
-            saveDB();
-            render();
-        }
-
-        function setTab(tab) {
-            db.currentTab = tab;
-            saveDB();
-            render();
-        }
-
-        // --- PESTAÑA 1: INVENTARIO ACTUAL (ESTILO EXACTO IMAGEN 2) ---
+        // --- TAB 1: INVENTARIO & CARGA MASIVA ---
         let inventorySearchQuery = '';
 
         function renderInventoryTab() {
-            const isAdmin = db.currentUser.role === 'admin';
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            const filteredInv = inv.filter(i => i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase()));
+            const items = state.inventory[state.currentLocation][state.currentSection];
+            const filtered = items.filter(i => 
+                i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+            );
+            const isAdmin = state.currentUser.role === 'admin';
 
             return `
-                <div class="space-y-6">
-                    <!-- Tarjeta de Vista Actual -->
-                    <div class="bg-indigo-50/60 border border-indigo-100 p-5 rounded-2xl flex flex-wrap justify-between items-center gap-4 shadow-sm">
-                        <div>
-                            <h3 class="font-bold text-slate-900 flex items-center text-sm">
-                                <span class="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
-                                Vista Actual: Sede ${db.currentSedetab} / Sección ${db.currentSection.toUpperCase()}
-                            </h3>
-                            <p class="text-xs text-slate-500 mt-0.5">Los datos mostrados corresponden exclusivamente a esta selección.</p>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <!-- Header Actions -->
+                    <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                        <div class="relative flex-1 max-w-md">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" oninput="inventorySearchQuery = this.value; renderInventoryTableOnly();" value="${inventorySearchQuery}" placeholder="Buscar por código o nombre de insumo..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white transition">
                         </div>
-                        <div class="bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
-                            Usuario: ${db.currentUser.name}
+                        ${isAdmin ? `
+                        <div class="flex items-center gap-2">
+                            <button onclick="openAddProductModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-plus"></i> Agregar Insumo
+                            </button>
+                            <button onclick="openBulkUploadModal()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Carga Masiva
+                            </button>
                         </div>
+                        ` : `
+                        <div class="text-xs text-slate-500 italic flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-indigo-600"></i> Solo el administrador (27984352) puede gestionar el inventario.
+                        </div>
+                        `}
                     </div>
 
-                    <!-- Tarjeta Contenedora Principal del Inventario -->
-                    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6 space-y-6">
-                        <!-- Barra de Búsqueda y Botones (Estilo Imagen 2) -->
-                        <div class="flex flex-wrap justify-between items-center gap-4">
-                            <div class="relative flex-1 max-w-md">
-                                <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
-                                <input type="text" id="inv-search-input" oninput="inventorySearchQuery = this.value; render()" value="${inventorySearchQuery}" placeholder="Buscar por código o nombre de insumo..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600 transition">
-                            </div>
+                    <!-- Table -->
+                    <div class="overflow-x-auto" id="inventory-table-container">
+                        ${renderInventoryTableHTML(filtered, isAdmin)}
+                    </div>
+                </div>
+            `;
+        }
 
-                            ${isAdmin ? `
-                                <div class="flex flex-wrap gap-2">
-                                    <button onclick="openAddProductModal()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center"><i class="fa-solid fa-plus mr-1.5"></i> Agregar Nuevo Insumo</button>
-                                    <button onclick="openBulkUploadModal()" class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold rounded-xl shadow-md shadow-cyan-600/20 transition flex items-center"><i class="fa-solid fa-file-excel mr-1.5"></i> Carga Masiva</button>
-                                </div>
-                            ` : ''}
+        function renderInventoryTableOnly() {
+            const container = document.getElementById('inventory-table-container');
+            if(container) {
+                const items = state.inventory[state.currentLocation][state.currentSection];
+                const filtered = items.filter(i => 
+                    i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                    i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+                );
+                const isAdmin = state.currentUser.role === 'admin';
+                container.innerHTML = renderInventoryTableHTML(filtered, isAdmin);
+            }
+        }
+
+        function renderInventoryTableHTML(items, isAdmin) {
+            if (items.length === 0) {
+                return `
+                    <div class="py-12 text-center text-slate-400">
+                        <i class="fa-solid fa-box-open text-4xl mb-3"></i>
+                        <p class="text-sm font-medium">No se encontraron insumos registrados en esta sección.</p>
+                    </div>
+                `;
+            }
+
+            return `
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase font-semibold text-slate-500 tracking-wider">
+                            <th class="py-3.5 px-6">Código</th>
+                            <th class="py-3.5 px-6">Nombre del Insumo</th>
+                            <th class="py-3.5 px-6">Cantidad Disponible</th>
+                            <th class="py-3.5 px-6">Estado de Stock</th>
+                            ${isAdmin ? `<th class="py-3.5 px-6 text-right">Acciones</th>` : ''}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        ${items.map(item => {
+                            let badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                            let statusText = 'Stock Óptimo';
+                            if (item.quantity <= item.minStock) {
+                                badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                statusText = 'Stock Bajo';
+                            }
+                            return `
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="py-4 px-6 font-mono font-semibold text-indigo-600">${item.code}</td>
+                                    <td class="py-4 px-6 font-medium text-slate-800">${item.name}</td>
+                                    <td class="py-4 px-6 font-bold text-slate-900">${item.quantity} unidades</td>
+                                    <td class="py-4 px-6">
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${badgeColor}">
+                                            ${statusText}
+                                        </span>
+                                    </td>
+                                    ${isAdmin ? `
+                                    <td class="py-4 px-6 text-right">
+                                        <div class="inline-flex items-center bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200">
+                                            <button onclick="openEditProductModal('${item.code}')" title="Modificar Insumo" class="px-3 py-1.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                                                <i class="fa-solid fa-pen text-xs"></i> Modificar
+                                            </button>
+                                            <button onclick="deleteProduct('${item.code}')" title="Eliminar Insumo" class="px-3 py-1.5 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
+                                                <i class="fa-solid fa-trash text-xs"></i> Eliminar
+                                            </button>
+                                        </div>
+                                    </td>
+                                    ` : ''}
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function openAddProductModal() {
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg text-slate-800">Agregar Nuevo Insumo</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <p class="text-xs text-slate-500 mb-4">Se agregará a la Sede <span class="font-bold text-indigo-600">${state.currentLocation}</span> y sección <span class="font-bold text-indigo-600 uppercase">${state.currentSection}</span>.</p>
+                        
+                        <form onsubmit="handleAddProduct(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Código del Insumo</label>
+                                <input type="text" id="new-code" required placeholder="Ej. HOS-004 o COM-003" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre del Insumo</label>
+                                <input type="text" id="new-name" required placeholder="Ej. Jeringas 5ml" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cantidad Inicial</label>
+                                <input type="number" id="new-qty" min="0" required placeholder="Ej. 100" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Stock Mínimo (Alerta)</label>
+                                <input type="number" id="new-min" min="0" required placeholder="Ej. 20" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div class="flex items-center justify-end gap-3 mt-6">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition">Guardar Insumo</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleAddProduct(e) {
+            e.preventDefault();
+            const code = document.getElementById('new-code').value.trim().toUpperCase();
+            const name = document.getElementById('new-name').value.trim();
+            const quantity = parseInt(document.getElementById('new-qty').value);
+            const minStock = parseInt(document.getElementById('new-min').value);
+
+            const list = state.inventory[state.currentLocation][state.currentSection];
+            if (list.some(i => i.code === code)) {
+                showToast('Ya existe un insumo con este código en la sección.', 'error');
+                return;
+            }
+
+            list.push({ code, name, quantity, minStock });
+            saveState();
+            closeModal();
+            showToast('¡Insumo agregado con éxito a la base de datos!');
+            render();
+        }
+
+        // --- CARGA MASIVA DE INSUMOS (EXCEL) ---
+        function openBulkUploadModal() {
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Carga Masiva de Insumos</h3>
+                                <p class="text-xs text-slate-500">Sede actual: <span class="font-bold text-indigo-600">${state.currentLocation}</span> / Sección: <span class="font-bold text-indigo-600 uppercase">${state.currentSection}</span></p>
+                            </div>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
 
-                        <!-- Tabla de Inventario -->
-                        <div class="overflow-x-auto border border-slate-100 rounded-xl">
-                            <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr class="border-b border-slate-200 text-slate-400 text-[11px] uppercase tracking-wider bg-slate-50/70">
-                                        <th class="py-3.5 px-4 font-semibold">CÓDIGO</th>
-                                        <th class="py-3.5 px-4 font-semibold">NOMBRE DEL INSUMO</th>
-                                        <th class="py-3.5 px-4 font-semibold">CANTIDAD DISPONIBLE</th>
-                                        <th class="py-3.5 px-4 font-semibold">ESTADO DE STOCK</th>
-                                        <th class="py-3.5 px-4 font-semibold text-right">ACCIONES</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 text-xs">
-                                    ${filteredInv.length === 0 ? `
-                                        <tr><td colspan="5" class="text-center py-10 text-slate-400">No se encontraron insumos registrados.</td></tr>
-                                    ` : filteredInv.map((item) => {
-                                        const originalIdx = inv.findIndex(i => i.code === item.code);
-                                        const stockStatus = item.qty > 10 ? '<span class="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full font-semibold text-[11px]">Stock Óptimo</span>' : '<span class="px-3 py-1 bg-amber-50 text-amber-600 border border-amber-200 rounded-full font-semibold text-[11px]">Stock Bajo</span>';
-                                        return `
-                                            <tr class="hover:bg-slate-50/80 transition">
-                                                <td class="py-4 px-4 font-mono text-indigo-600 font-bold">${item.code}</td>
-                                                <td class="py-4 px-4 font-medium text-slate-800">${item.name}</td>
-                                                <td class="py-4 px-4 font-bold text-slate-900">${item.qty} unidades</td>
-                                                <td class="py-4 px-4">${stockStatus}</td>
-                                                <td class="py-4 px-4 text-right space-x-2">
-                                                    ${isAdmin ? `
-                                                        <button onclick="editItem(${originalIdx})" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-semibold rounded-lg shadow-sm transition"><i class="fa-solid fa-pen mr-1"></i> Modificar</button>
-                                                        <button onclick="deleteItem(${originalIdx})" class="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-200 font-semibold rounded-lg shadow-sm transition"><i class="fa-solid fa-trash mr-1"></i> Eliminar</button>
-                                                    ` : `<span class="text-slate-400 italic">Solo lectura</span>`}
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
+                        <div class="space-y-4">
+                            <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-xs text-indigo-900 space-y-2">
+                                <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> Instrucciones:</p>
+                                <p>Sube un archivo Excel (.xlsx o .csv) que contenga las siguientes columnas con sus respectivos encabezados:</p>
+                                <p class="font-mono bg-white p-2 rounded border border-indigo-200 text-indigo-900">Codigo | Nombre | Cantidad | StockMinimo</p>
+                            </div>
+
+                            <div>
+                                <button onclick="downloadBulkTemplate()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-2">
+                                    <i class="fa-solid fa-download text-indigo-600"></i> Descargar Plantilla Excel de Ejemplo
+                                </button>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-2">Seleccionar Archivo Excel (.xlsx / .csv)</label>
+                                <input type="file" id="bulk-excel-file" accept=".xlsx, .xls, .csv" class="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer border border-slate-200 rounded-xl bg-slate-50">
+                            </div>
+
+                            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="button" onclick="processBulkUploadFile()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                    <i class="fa-solid fa-upload"></i> Procesar Carga Masiva
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        // --- PESTAÑA 2: REALIZAR PEDIDO ---
-        let currentOrderItems = [];
+        function downloadBulkTemplate() {
+            const templateData = [
+                { Codigo: "HOS-200", Nombre: "Ejemplo Insumo Hospitalario 1", Cantidad: 100, StockMinimo: 20 },
+                { Codigo: "HOS-201", Nombre: "Ejemplo Insumo Hospitalario 2", Cantidad: 50, StockMinimo: 10 }
+            ];
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "PlantillaInsumos");
+            XLSX.writeFile(wb, `Plantilla_Carga_Masiva_${state.currentLocation}_${state.currentSection}.xlsx`);
+            showToast('Plantilla descargada con éxito.');
+        }
+
+        function processBulkUploadFile() {
+            const fileInput = document.getElementById('bulk-excel-file');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showToast('Por favor selecciona un archivo Excel.', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonRows.length === 0) {
+                        showToast('El archivo Excel está vacío.', 'error');
+                        return;
+                    }
+
+                    const list = state.inventory[state.currentLocation][state.currentSection];
+                    let addedCount = 0;
+                    let updatedCount = 0;
+
+                    jsonRows.forEach(row => {
+                        const code = String(row['Codigo'] || row['Código'] || row['codigo'] || row['CODE'] || '').trim().toUpperCase();
+                        const name = String(row['Nombre'] || row['nombre'] || row['NAME'] || '').trim();
+                        const quantity = parseInt(row['Cantidad'] || row['cantidad'] || row['QTY'] || 0);
+                        const minStock = parseInt(row['StockMinimo'] || row['stockminimo'] || row['MinStock'] || 20);
+
+                        if (code && name) {
+                            const existing = list.find(i => i.code === code);
+                            if (existing) {
+                                existing.name = name;
+                                existing.quantity += isNaN(quantity) ? 0 : quantity;
+                                existing.minStock = isNaN(minStock) ? existing.minStock : minStock;
+                                updatedCount++;
+                            } else {
+                                list.push({
+                                    code: code,
+                                    name: name,
+                                    quantity: isNaN(quantity) ? 0 : quantity,
+                                    minStock: isNaN(minStock) ? 20 : minStock
+                                });
+                                addedCount++;
+                            }
+                        }
+                    });
+
+                    saveState();
+                    closeModal();
+                    showToast(`¡Carga masiva completada! Se agregaron ${addedCount} nuevos insumos y se actualizaron ${updatedCount}.`);
+                    render();
+                } catch (err) {
+                    console.error(err);
+                    showToast('Error al leer el archivo Excel. Verifique el formato.', 'error');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function openEditProductModal(code) {
+            const list = state.inventory[state.currentLocation][state.currentSection];
+            const item = list.find(i => i.code === code);
+            if (!item) return;
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-lg text-slate-800">Modificar Insumo (${item.code})</h3>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        
+                        <form onsubmit="handleEditProduct(event, '${item.code}')" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Nombre del Insumo</label>
+                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Cantidad Disponible</label>
+                                <input type="number" id="edit-qty" min="0" required value="${item.quantity}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Stock Mínimo (Alerta)</label>
+                                <input type="number" id="edit-min" min="0" required value="${item.minStock}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600">
+                            </div>
+                            <div class="flex items-center justify-end gap-3 mt-6">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition">Guardar Cambios</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleEditProduct(e, code) {
+            e.preventDefault();
+            const name = document.getElementById('edit-name').value.trim();
+            const quantity = parseInt(document.getElementById('edit-qty').value);
+            const minStock = parseInt(document.getElementById('edit-min').value);
+
+            const list = state.inventory[state.currentLocation][state.currentSection];
+            const item = list.find(i => i.code === code);
+            if (item) {
+                item.name = name;
+                item.quantity = quantity;
+                item.minStock = minStock;
+                saveState();
+                closeModal();
+                showToast('¡Insumo modificado con éxito!');
+                render();
+            }
+        }
+
+        function deleteProduct(code) {
+            const list = state.inventory[state.currentLocation][state.currentSection];
+            const idx = list.findIndex(i => i.code === code);
+            if (idx !== -1) {
+                list.splice(idx, 1);
+                saveState();
+                showToast('Insumo eliminado de la base de datos.', 'info');
+                render();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal-container').innerHTML = '';
+        }
+
+        // --- TAB 2: REALIZAR PEDIDO ---
+        let orderSearchQuery = '';
 
         function renderOrderTab() {
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
+            const items = state.inventory[state.currentLocation][state.currentSection];
+            const filtered = items.filter(i => 
+                i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+            );
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-800 text-sm">Seleccionar Insumos para Pedido</h3>
-                        <p class="text-xs text-slate-500">Busca por código o nombre y añade las cantidades necesarias.</p>
-                        
-                        <div class="relative">
-                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-magnifying-glass"></i></span>
-                            <input type="text" id="order-search" oninput="filterOrderItems()" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
+                    <!-- Products Selection Column -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800 text-base">Seleccionar Insumos para Pedido</h3>
+                            <span class="text-xs text-slate-500">Sede: ${state.currentLocation} / ${state.currentSection}</span>
+                        </div>
+                        <div class="relative mb-4">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-search"></i></span>
+                            <input type="text" oninput="orderSearchQuery = this.value; renderOrderProductsOnly();" value="${orderSearchQuery}" placeholder="Buscar insumo por nombre o código..." class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 transition">
                         </div>
 
-                        <div id="order-search-results" class="space-y-2 max-h-96 overflow-y-auto">
-                            ${inv.map(item => `
-                                <div class="flex justify-between items-center p-3 border border-slate-100 hover:bg-slate-50 rounded-xl transition text-xs">
-                                    <div>
-                                        <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
-                                        <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
-                                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold">
-                                        <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
-                                    </div>
-                                </div>
-                            `).join('')}
+                        <div class="overflow-x-auto max-h-[450px] overflow-y-auto" id="order-products-container">
+                            ${renderOrderProductsHTML(filtered)}
                         </div>
                     </div>
 
-                    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                    <!-- Cart / Active Order Column -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between">
                         <div>
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-slate-800 text-sm">Carrito de Pedido</h3>
-                                <span class="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-bold">${currentOrderItems.length} ítems</span>
+                            <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-cart-shopping text-indigo-600"></i> Carrito de Pedido
+                                </h3>
+                                <span class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-lg">${state.cart.length} ítems</span>
                             </div>
-                            <div id="selected-order-list" class="space-y-2 max-h-72 overflow-y-auto">
-                                ${currentOrderItems.length === 0 ? `
-                                    <div class="text-center py-12 text-slate-400">
-                                        <i class="fa-solid fa-cart-shopping text-3xl mb-2 text-slate-300"></i>
+
+                            <div class="space-y-3 max-h-[300px] overflow-y-auto mb-4" id="cart-items-list">
+                                ${state.cart.length === 0 ? `
+                                    <div class="py-12 text-center text-slate-400">
+                                        <i class="fa-solid fa-basket-shopping text-3xl mb-2"></i>
                                         <p class="text-xs">No hay insumos agregados al pedido actual.</p>
                                     </div>
-                                ` : currentOrderItems.map((item, idx) => `
-                                    <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-200">
+                                ` : state.cart.map((item, idx) => `
+                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
                                         <div>
-                                            <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
-                                            <p class="font-semibold text-slate-800">${item.name}</p>
+                                            <p class="text-xs font-mono font-bold text-indigo-600">${item.code}</p>
+                                            <p class="text-xs font-semibold text-slate-800 line-clamp-1">${item.name}</p>
+                                            <p class="text-xs text-slate-500 font-medium mt-0.5">Cantidad: <span class="font-bold text-slate-800">${item.qty}</span></p>
                                         </div>
-                                        <div class="flex items-center gap-3">
-                                            <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg font-bold">${item.qtyRequested} sol.</span>
-                                            <button onclick="currentOrderItems.splice(${idx}, 1); render()" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash"></i></button>
+                                        <button onclick="removeFromCart(${idx})" class="text-slate-400 hover:text-rose-600 p-1.5"><i class="fa-solid fa-trash text-xs"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="border-t border-slate-100 pt-4">
+                            <button onclick="submitOrder()" ${state.cart.length === 0 ? 'disabled' : ''} class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-paper-plane"></i> Realizar Pedido Oficial
+                            </button>
+                            <p class="text-[10px] text-slate-400 text-center mt-2">Se registrará automáticamente tu usuario, fecha y hora.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOrderProductsOnly() {
+            const container = document.getElementById('order-products-container');
+            if(container) {
+                const items = state.inventory[state.currentLocation][state.currentSection];
+                const filtered = items.filter(i => 
+                    i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                    i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+                );
+                container.innerHTML = renderOrderProductsHTML(filtered);
+            }
+        }
+
+        function renderOrderProductsHTML(items) {
+            if (items.length === 0) {
+                return `<div class="py-8 text-center text-slate-400 text-xs">No hay insumos coincidentes.</div>`;
+            }
+
+            return `
+                <div class="space-y-3">
+                    ${items.map(item => `
+                        <div class="p-3.5 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-xl flex items-center justify-between gap-4 transition">
+                            <div>
+                                <span class="text-xs font-mono font-bold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md">${item.code}</span>
+                                <h4 class="font-semibold text-slate-800 text-sm mt-1">${item.name}</h4>
+                                <p class="text-xs text-slate-500 mt-0.5">Disponible en inventario: <span class="font-bold text-slate-700">${item.quantity}</span></p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="number" id="qty-${item.code}" min="1" value="1" class="w-20 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-center focus:outline-none focus:border-indigo-600">
+                                <button onclick="addToCart('${item.code}', '${item.name.replace(/'/g, "\\'")}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function addToCart(code, name) {
+            const qtyInput = document.getElementById(`qty-${code}`);
+            const qty = parseInt(qtyInput.value);
+            if (isNaN(qty) || qty <= 0) {
+                showToast('Por favor ingresa una cantidad válida.', 'error');
+                return;
+            }
+
+            const existing = state.cart.find(i => i.code === code);
+            if (existing) {
+                existing.qty += qty;
+            } else {
+                state.cart.push({ code, name, qty });
+            }
+            showToast(`Insumo ${code} añadido al carrito.`);
+            render();
+        }
+
+        function removeFromCart(idx) {
+            state.cart.splice(idx, 1);
+            render();
+        }
+
+        function submitOrder() {
+            if (state.cart.length === 0) return;
+
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().split(' ')[0];
+
+            const orderItems = state.cart.map(i => ({
+                code: i.code,
+                name: i.name,
+                orderedQty: i.qty,
+                deliveredQty: 0,
+                pendingQty: i.qty
+            }));
+
+            const newOrder = {
+                id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
+                location: state.currentLocation,
+                section: state.currentSection,
+                userName: state.currentUser.name,
+                userDoc: state.currentUser.document || state.currentUser.username,
+                date: dateStr,
+                time: timeStr,
+                items: orderItems,
+                status: 'Pendiente'
+            };
+
+            state.orders.unshift(newOrder);
+
+            state.notifications.unshift({
+                id: 'NOTIF-' + Date.now(),
+                orderId: newOrder.id,
+                message: `${state.currentUser.name} realizó un pedido (${newOrder.id}) en Sede ${state.currentLocation} / ${state.currentSection}.`,
+                location: state.currentLocation,
+                section: state.currentSection,
+                user: state.currentUser.name,
+                date: dateStr,
+                time: timeStr,
+                read: false
+            });
+
+            state.cart = [];
+            saveState();
+            showToast('¡Pedido realizado con éxito y notificación enviada al administrador!');
+            switchTab('seguimiento');
+        }
+
+        // --- TAB 3: SEGUIMIENTO Y RECEPCIÓN ---
+        function renderTrackingTab() {
+            const isAdmin = state.currentUser.role === 'admin';
+            const orders = isAdmin ? state.orders : state.orders.filter(o => o.userName === state.currentUser.name);
+
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="font-bold text-slate-800 text-lg">Seguimiento de Pedidos y Recepción de Insumos</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">Controla las entregas parciales, saldos pendientes y recepciones posteriores.</p>
+                        </div>
+                        <span class="text-xs bg-indigo-50 text-indigo-700 font-semibold px-3 py-1.5 rounded-xl border border-indigo-100">${orders.length} pedidos registrados</span>
+                    </div>
+
+                    ${orders.length === 0 ? `
+                        <div class="py-16 text-center text-slate-400">
+                            <i class="fa-solid fa-clipboard-list text-4xl mb-3"></i>
+                            <p class="text-sm font-medium">No hay pedidos registrados actualmente.</p>
+                        </div>
+                    ` : `
+                        <div class="space-y-6">
+                            ${orders.map(order => {
+                                let statusBadge = 'bg-amber-50 text-amber-700 border-amber-200';
+                                if (order.status === 'Completado') statusBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                if (order.status === 'Parcial') statusBadge = 'bg-blue-50 text-blue-700 border-blue-200';
+
+                                return `
+                                    <div class="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 hover:bg-slate-50 transition">
+                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+                                            <div>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="font-mono font-bold text-indigo-600 text-base">${order.id}</span>
+                                                    <span class="px-2.5 py-1 rounded-lg text-xs font-semibold border ${statusBadge}">${order.status}</span>
+                                                    <span class="text-xs bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-md font-medium">Sede: ${order.location} (${order.section})</span>
+                                                </div>
+                                                <p class="text-xs text-slate-500 mt-1">Solicitado por: <span class="font-semibold text-slate-700">${order.userName}</span> el ${order.date} a las ${order.time}</p>
+                                            </div>
+                                            <div class="flex items-center gap-2 self-start sm:self-auto">
+                                                <button onclick="exportSingleOrderXLSX('${order.id}')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-file-excel"></i> Descargar Excel (.xlsx)
+                                                </button>
+                                                ${order.status !== 'Completado' ? `
+                                                <button onclick="openReceptionModal('${order.id}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-truck-ramp-box"></i> Registrar Llegada
+                                                </button>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-4 overflow-x-auto">
+                                            <table class="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr class="text-slate-400 uppercase font-semibold border-b border-slate-200">
+                                                        <th class="py-2 px-3">Código</th>
+                                                        <th class="py-2 px-3">Insumo</th>
+                                                        <th class="py-2 px-3">Cantidad Pedida</th>
+                                                        <th class="py-2 px-3">Llegaron</th>
+                                                        <th class="py-2 px-3">Pendientes</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                                    ${order.items.map(item => `
+                                                        <tr>
+                                                            <td class="py-2.5 px-3 font-mono text-indigo-600">${item.code}</td>
+                                                            <td class="py-2.5 px-3 text-slate-900">${item.name}</td>
+                                                            <td class="py-2.5 px-3 font-bold">${item.orderedQty}</td>
+                                                            <td class="py-2.5 px-3 text-emerald-600 font-bold">${item.deliveredQty}</td>
+                                                            <td class="py-2.5 px-3 text-rose-600 font-bold">${item.pendingQty}</td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function openReceptionModal(orderId) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Registrar Recepción - ${order.id}</h3>
+                                <p class="text-xs text-slate-500">Ingresa las cantidades que acaban de llegar para actualizar el inventario y pendientes.</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+
+                        <form onsubmit="handleSaveReception(event, '${order.id}')" class="space-y-4">
+                            <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                                ${order.items.map((item, idx) => `
+                                    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div>
+                                                <span class="font-mono text-xs font-bold text-indigo-600">${item.code}</span>
+                                                <h4 class="text-xs font-semibold text-slate-800">${item.name}</h4>
+                                            </div>
+                                            <span class="text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">Pendiente: ${item.pendingQty}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <label class="text-xs text-slate-500 font-medium">Llegaron ahora:</label>
+                                            <input type="number" min="0" max="${item.pendingQty}" id="arrived-${idx}" value="0" class="w-24 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center focus:outline-none focus:border-indigo-600">
+                                            <span class="text-[10px] text-slate-400">(Máx. ${item.pendingQty})</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
+                                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition">Actualizar Recepción e Inventario</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleSaveReception(e, orderId) {
+            e.preventDefault();
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            let allCompleted = true;
+
+            order.items.forEach((item, idx) => {
+                const arrivedInput = document.getElementById(`arrived-${idx}`);
+                const arrivedNow = parseInt(arrivedInput.value) || 0;
+
+                if (arrivedNow > 0) {
+                    item.deliveredQty += arrivedNow;
+                    item.pendingQty -= arrivedNow;
+
+                    const invItem = state.inventory[order.location][order.section].find(i => i.code === item.code);
+                    if (invItem) {
+                        invItem.quantity += arrivedNow;
+                    }
+                }
+
+                if (item.pendingQty > 0) {
+                    allCompleted = false;
+                }
+            });
+
+            order.status = allCompleted ? 'Completado' : 'Parcial';
+
+            saveState();
+            closeModal();
+            showToast('¡Recepción registrada y stock actualizado con éxito!');
+            render();
+        }
+
+        // --- TAB 4: PANEL ADMIN & REPORTES ---
+        function renderReportsTab() {
+            const orders = state.orders;
+            const monthlyStats = {};
+            let totalRequestedAllTime = 0;
+
+            orders.forEach(ord => {
+                const monthKey = ord.date.substring(0, 7);
+                if (!monthlyStats[monthKey]) {
+                    monthlyStats[monthKey] = { totalOrders: 0, totalItems: 0 };
+                }
+                monthlyStats[monthKey].totalOrders += 1;
+                ord.items.forEach(it => {
+                    monthlyStats[monthKey].totalItems += it.orderedQty;
+                    totalRequestedAllTime += it.orderedQty;
+                });
+            });
+
+            const monthsCount = Object.keys(monthlyStats).length || 1;
+            const monthlyAverage = Math.round(totalRequestedAllTime / monthsCount);
+            const currentYear = new Date().getFullYear().toString();
+            let annualTotal = 0;
+            Object.keys(monthlyStats).forEach(mk => {
+                if (mk.startsWith(currentYear)) {
+                    annualTotal += monthlyStats[mk].totalItems;
+                }
+            });
+
+            return `
+                <div class="space-y-6">
+                    <!-- Analytics Grid (Clickable Cards) -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div onclick="openYearlyReportModal()" class="cursor-pointer bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:border-indigo-600 hover:shadow-md transition flex items-center gap-4 group">
+                            <div class="p-4 rounded-2xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white text-indigo-600 text-xl font-bold transition">
+                                <i class="fa-solid fa-calendar-days"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Total Solicitado este Año (${currentYear}) <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${annualTotal} <span class="text-xs font-medium text-slate-500">insumos</span></h4>
+                            </div>
+                        </div>
+
+                        <div onclick="openMonthlyAverageModal()" class="cursor-pointer bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:border-emerald-600 hover:shadow-md transition flex items-center gap-4 group">
+                            <div class="p-4 rounded-2xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-600 text-xl font-bold transition">
+                                <i class="fa-solid fa-chart-pie"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Promedio Mensual de Pedidos <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${monthlyAverage} <span class="text-xs font-medium text-slate-500">insumos/mes</span></h4>
+                            </div>
+                        </div>
+
+                        <div onclick="openAllOrdersReportModal()" class="cursor-pointer bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:border-blue-600 hover:shadow-md transition flex items-center gap-4 group">
+                            <div class="p-4 rounded-2xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white text-blue-600 text-xl font-bold transition">
+                                <i class="fa-solid fa-file-invoice"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs uppercase tracking-wider font-semibold text-slate-400">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i></p>
+                                <h4 class="text-2xl font-bold text-slate-800 mt-1">${orders.length} <span class="text-xs font-medium text-slate-500">órdenes</span></h4>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notifications & Activity Log -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Notifications -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-bell text-indigo-600"></i> Notificaciones de Pedidos Recientes
+                                </h3>
+                                <span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg font-semibold">${state.notifications.length} eventos</span>
+                            </div>
+
+                            <div class="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                                ${state.notifications.length === 0 ? `
+                                    <div class="py-12 text-center text-slate-400 text-xs">No hay notificaciones recientes.</div>
+                                ` : state.notifications.map(notif => `
+                                    <div onclick="openNotificationDetail('${notif.id}')" class="p-3.5 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 rounded-xl flex items-start gap-3 cursor-pointer transition">
+                                        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                                            <i class="fa-solid fa-circle-exclamation text-xs"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="text-xs text-slate-800 font-medium">${notif.message}</p>
+                                            <p class="text-[10px] text-slate-400 mt-1 flex items-center justify-between">
+                                                <span>${notif.date} a las ${notif.time}</span>
+                                                <span class="text-indigo-600 font-semibold">Ver detalle <i class="fa-solid fa-chevron-right text-[9px]"></i></span>
+                                            </p>
                                         </div>
                                     </div>
                                 `).join('')}
                             </div>
                         </div>
 
-                        <button onclick="submitOrder()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 transition flex items-center justify-center space-x-2">
-                            <i class="fa-solid fa-paper-plane"></i><span>Realizar Pedido Oficial</span>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        function filterOrderItems() {
-            const query = document.getElementById('order-search').value.toLowerCase();
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            const container = document.getElementById('order-search-results');
-            const filtered = inv.filter(i => i.code.toLowerCase().includes(query) || i.name.toLowerCase().includes(query));
-
-            container.innerHTML = filtered.map(item => `
-                <div class="flex justify-between items-center p-3 border border-slate-100 hover:bg-slate-50 rounded-xl transition text-xs">
-                    <div>
-                        <span class="font-mono text-indigo-600 font-bold">${item.code}</span>
-                        <p class="font-semibold text-slate-800 mt-0.5">${item.name}</p>
-                        <p class="text-[10px] text-slate-400">Disponible: ${item.qty}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="qty-${item.code}" min="1" value="1" class="w-16 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-center font-bold">
-                        <button onclick="addOrderItemSelected('${item.code}', '${item.name}')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"><i class="fa-solid fa-plus mr-1"></i> Añadir</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function addOrderItemSelected(code, name) {
-            const qtyInput = document.getElementById(`qty-${code}`);
-            const qty = parseInt(qtyInput.value) || 1;
-
-            const existing = currentOrderItems.find(x => x.code === code);
-            if (existing) {
-                existing.qtyRequested += qty;
-            } else {
-                currentOrderItems.push({ code, name, qtyRequested: qty, qtyPending: qty, qtyReceived: 0 });
-            }
-            render();
-        }
-
-        function submitOrder() {
-            if (currentOrderItems.length === 0) {
-                alert('Debe agregar al menos un insumo al pedido.');
-                return;
-            }
-
-            const now = new Date();
-            const dateStr = now.toISOString().split('T')[0];
-            const timeStr = now.toTimeString().split(' ')[0];
-
-            const newOrder = {
-                id: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
-                userName: db.currentUser.name,
-                sede: db.currentSedetab,
-                section: db.currentSection,
-                date: dateStr,
-                time: timeStr,
-                status: 'Pendiente',
-                items: JSON.parse(JSON.stringify(currentOrderItems))
-            };
-
-            db.orders.unshift(newOrder);
-            currentOrderItems = [];
-            db.currentTab = 'recepcion';
-            saveDB();
-            alert('¡Pedido realizado con éxito!');
-            render();
-        }
-
-        // --- PESTAÑA 3: RECEPCIÓN Y PENDIENTES ---
-        function renderReceptionTab() {
-            const isAdmin = db.currentUser.role === 'admin';
-
-            return `
-                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <h3 class="font-bold text-slate-800 text-sm">Historial de Pedidos y Recepción</h3>
-                            <p class="text-xs text-slate-500">Gestiona entregas parciales y cantidades pendientes de cada pedido.</p>
-                        </div>
-                    </div>
-
-                    <div class="space-y-3">
-                        ${db.orders.length === 0 ? `
-                            <div class="text-center py-12 text-slate-400">
-                                <i class="fa-solid fa-clipboard-list text-3xl mb-2 text-slate-300"></i>
-                                <p class="text-xs">No hay pedidos realizados aún.</p>
+                        <!-- Monthly Breakdown Table -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                    <i class="fa-solid fa-table-cells text-indigo-600"></i> Relacionado Mensual de Insumos Solicitados
+                                </h3>
                             </div>
-                        ` : db.orders.map(order => `
-                            <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4">
-                                <div>
-                                    <div class="flex items-center space-x-2">
-                                        <span class="font-mono text-xs text-indigo-600 font-bold">${order.id}</span>
-                                        <span class="text-xs font-semibold text-slate-800">${order.userName} realizó pedido el ${order.date}</span>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 mt-1">Sede: ${order.sede} (${order.section}) • Estado: <span class="font-bold ${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'}">${order.status}</span></p>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <button onclick="openOrderDetail('${order.id}')" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition">Ver insumos ></button>
-                                    ${isAdmin ? `<button onclick="openReceiveModal('${order.id}')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition">Registrar Llegada</button>` : ''}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
 
-        // --- PESTAÑA 4: PANEL ADMIN & REPORTES ---
-        function renderReportsTab() {
-            const totalOrdersCount = db.orders.length;
-
-            return `
-                <div class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div onclick="openTotalOrdersModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
-                            <div class="flex items-center space-x-4">
-                                <div class="bg-indigo-50 text-indigo-600 p-3.5 rounded-xl"><i class="fa-solid fa-file-invoice text-xl"></i></div>
-                                <div>
-                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Total Pedidos Realizados <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
-                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">${totalOrdersCount} órdenes</h4>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div onclick="openMonthlyAverageModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
-                            <div class="flex items-center space-x-4">
-                                <div class="bg-emerald-50 text-emerald-600 p-3.5 rounded-xl"><i class="fa-solid fa-calendar-days text-xl"></i></div>
-                                <div>
-                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Promedio Mensual (Meses) <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
-                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes</h4>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div onclick="openAnnualModal()" class="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm cursor-pointer hover:border-indigo-600 transition">
-                            <div class="flex items-center space-x-4">
-                                <div class="bg-cyan-50 text-cyan-600 p-3.5 rounded-xl"><i class="fa-solid fa-chart-line text-xl"></i></div>
-                                <div>
-                                    <p class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Total Solicitado Este Año <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1"></i></p>
-                                    <h4 class="text-xl font-bold text-slate-800 mt-0.5">Ver por mes y anual</h4>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // --- GESTIÓN DE INSUMOS (AGREGAR, MODIFICAR, ELIMINAR, CARGA MASIVA) ---
-        function openAddProductModal() {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Agregar Nuevo Insumo</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <form onsubmit="saveNewProduct(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Código del Insumo</label>
-                                <input type="text" id="new-code" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Ej. HOS-004">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre del Insumo</label>
-                                <input type="text" id="new-name" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Ej. Alcohol Antiséptico 1 Litro">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad Inicial</label>
-                                <input type="number" id="new-qty" required min="0" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="100">
-                            </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Guardar Insumo</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function saveNewProduct(e) {
-            e.preventDefault();
-            const code = document.getElementById('new-code').value.trim();
-            const name = document.getElementById('new-name').value.trim();
-            const qty = parseInt(document.getElementById('new-qty').value);
-
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            if (inv.some(x => x.code === code)) {
-                alert('Ya existe un insumo con este código en la sección.');
-                return;
-            }
-
-            inv.push({ code, name, qty });
-            saveDB();
-            closeModal();
-            render();
-        }
-
-        function editItem(idx) {
-            const item = db.inventory[db.currentSedetab][db.currentSection][idx];
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Modificar Insumo</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <form onsubmit="updateItem(event, ${idx})" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Código</label>
-                                <input type="text" id="edit-code" required value="${item.code}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre</label>
-                                <input type="text" id="edit-name" required value="${item.name}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Cantidad</label>
-                                <input type="number" id="edit-qty" required min="0" value="${item.qty}" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600">
-                            </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Actualizar</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-        }
-
-        function updateItem(e, idx) {
-            e.preventDefault();
-            const code = document.getElementById('edit-code').value.trim();
-            const name = document.getElementById('edit-name').value.trim();
-            const qty = parseInt(document.getElementById('edit-qty').value);
-
-            const inv = db.inventory[db.currentSedetab][db.currentSection];
-            inv[idx] = { code, name, qty };
-            saveDB();
-            closeModal();
-            render();
-        }
-
-        function deleteItem(idx) {
-            if (confirm('¿Estás segura de eliminar este insumo?')) {
-                db.inventory[db.currentSedetab][db.currentSection].splice(idx, 1);
-                saveDB();
-                render();
-            }
-        }
-
-        // --- CARGA MASIVA ---
-        function openBulkUploadModal() {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-lg space-y-4 shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Carga Masiva de Insumos</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <p class="text-xs text-slate-500">Sube un archivo Excel (.xlsx o .csv) con dos columnas: <strong>Código</strong> y <strong>Nombre</strong>. Se agregarán a Sede ${db.currentSedetab} (${db.currentSection}) con cantidad inicial 0.</p>
-                        
-                        <div>
-                            <button onclick="downloadTemplate()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-xl text-slate-700 transition"><i class="fa-solid fa-download mr-1.5"></i> Descargar Plantilla Excel</button>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-2">Seleccionar Archivo Excel</label>
-                            <input type="file" id="bulk-file" accept=".xlsx, .xls, .csv" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer">
-                        </div>
-
-                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                            <button onclick="processBulkUpload()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Cargar Insumos</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function downloadTemplate() {
-            const templateData = [
-                { Código: "HOS-100", Nombre: "Ejemplo Insumo 1" },
-                { Código: "HOS-101", Nombre: "Ejemplo Insumo 2" }
-            ];
-            const ws = XLSX.utils.json_to_sheet(templateData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Plantilla");
-            XLSX.writeFile(wb, "Plantilla_Carga_Masiva_Insumos.xlsx");
-        }
-
-        function processBulkUpload() {
-            const fileInput = document.getElementById('bulk-file');
-            if (!fileInput.files || fileInput.files.length === 0) {
-                alert('Por favor selecciona un archivo Excel.');
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const json = XLSX.utils.sheet_to_json(worksheet);
-
-                    let addedCount = 0;
-                    const currentList = db.inventory[db.currentSedetab][db.currentSection];
-
-                    json.forEach(row => {
-                        const code = row['Código'] || row['Codigo'] || row['code'] || row['CÓDIGO'];
-                        const name = row['Nombre'] || row['nombre'] || row['NAME'] || row['Insumo'];
-
-                        if (code && name) {
-                            const codeStr = String(code).trim();
-                            const nameStr = String(name).trim();
-                            if (!currentList.some(i => i.code === codeStr)) {
-                                currentList.push({ code: codeStr, name: nameStr, qty: 0 });
-                                addedCount++;
-                            }
-                        }
-                    });
-
-                    saveDB();
-                    closeModal();
-                    alert(`¡Carga masiva exitosa! Se agregaron ${addedCount} nuevos insumos con cantidad 0.`);
-                    render();
-                } catch (err) {
-                    console.error(err);
-                    alert('Error al leer el archivo Excel. Asegúrate de que tenga las columnas correctas.');
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // --- DETALLE Y RECEPCIÓN DE PEDIDOS ---
-        function openOrderDetail(orderId) {
-            const order = db.orders.find(o => o.id === orderId);
-            if (!order) return;
-
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <span class="font-mono text-xs text-indigo-600 font-bold">${order.id}</span>
-                                <h3 class="text-lg font-bold text-slate-800">${order.userName} realizó pedido el ${order.date}</h3>
-                            </div>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1 text-slate-600">
-                            <p><strong>Sede y Sección:</strong> Sede ${order.sede} (${order.section})</p>
-                            <p><strong>Hora del Pedido:</strong> ${order.time}</p>
-                            <p><strong>Estado:</strong> <span class="${order.status === 'Completado' ? 'text-emerald-600' : 'text-amber-600'} font-bold">${order.status}</span></p>
-                        </div>
-
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Insumos Solicitados:</h4>
-                        <div class="space-y-2">
-                            ${order.items.map(i => `
-                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
-                                    <div>
-                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
-                                        <p class="font-semibold text-slate-800 mt-0.5">${i.name}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg font-bold">${i.qtyRequested} solicitados</span>
-                                        ${i.qtyPending > 0 ? `<p class="text-amber-600 mt-1 font-semibold">Pendiente: ${i.qtyPending}</p>` : `<p class="text-emerald-600 mt-1 font-semibold">Completado</p>`}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
-                            <button onclick="downloadSingleOrderExcel('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function downloadSingleOrderExcel(orderId) {
-            const order = db.orders.find(o => o.id === orderId);
-            if (!order) return;
-
-            const data = order.items.map(i => ({
-                "Código": i.code,
-                "Nombre del Insumo": i.name,
-                "Cantidad Solicitada": i.qtyRequested,
-                "Cantidad Pendiente": i.qtyPending
-            }));
-
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "DetallePedido");
-            XLSX.writeFile(wb, `Pedido_${order.id}.xlsx`);
-        }
-
-        function openReceiveModal(orderId) {
-            const order = db.orders.find(o => o.id === orderId);
-            if (!order) return;
-
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Registrar Llegada de Pedido (${order.id})</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <p class="text-xs text-slate-500">Ingresa la cantidad que llegó en esta entrega para actualizar los pendientes e inventario.</p>
-
-                        <div class="space-y-3">
-                            ${order.items.map((i, idx) => `
-                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
-                                    <div>
-                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
-                                        <p class="font-semibold text-slate-800">${i.name}</p>
-                                        <p class="text-slate-400 mt-0.5">Pendiente actual: ${i.qtyPending}</p>
-                                    </div>
-                                    <div>
-                                        <input type="number" id="incoming-${idx}" min="0" max="${i.qtyPending}" value="${i.qtyPending}" class="w-24 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-center font-bold text-sm">
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                            <button onclick="saveIncomingShipment('${order.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition">Guardar Recepción</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function saveIncomingShipment(orderId) {
-            const order = db.orders.find(o => o.id === orderId);
-            if (!order) return;
-
-            order.items.forEach((i, idx) => {
-                const incomingVal = parseInt(document.getElementById(`incoming-${idx}`).value) || 0;
-                if (incomingVal > 0) {
-                    i.qtyPending = Math.max(0, i.qtyPending - incomingVal);
-                    const invList = db.inventory[order.sede][order.section];
-                    const prod = invList.find(p => p.code === i.code);
-                    if (prod) prod.qty += incomingVal;
-                }
-            });
-
-            order.status = order.items.every(i => i.qtyPending === 0) ? 'Completado' : 'Pendiente Parcial';
-            saveDB();
-            closeModal();
-            alert('¡Recepción registrada e inventario actualizado con éxito!');
-            render();
-        }
-
-        // --- MODALES DE REPORTES ADMIN ---
-        function openTotalOrdersModal() {
-            const monthsMap = {};
-            db.orders.forEach(o => {
-                const m = o.date.substring(0, 7);
-                if (!monthsMap[m]) monthsMap[m] = [];
-                monthsMap[m].push(o);
-            });
-
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Total Pedidos Realizados (Por Mes)</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <p class="text-xs text-slate-500">Selecciona un mes para ver las órdenes ordenadas de la más reciente a la más antigua.</p>
-
-                        <div class="space-y-3">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay pedidos registrados.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
-                                <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                                    <h4 class="font-bold text-sm text-indigo-600 mb-2">📅 Mes: ${m} (${monthsMap[m].length} órdenes)</h4>
-                                    <div class="space-y-2">
-                                        ${monthsMap[m].sort((a,b) => new Date(b.date + ' ' + b.time) - new Date(a.date + ' ' + a.time)).map(o => `
-                                            <div class="flex justify-between items-center bg-white p-3 rounded-lg text-xs border border-slate-100">
-                                                <div>
-                                                    <span class="font-mono text-indigo-600 font-bold">${o.id}</span>
-                                                    <p class="font-semibold text-slate-800">${o.userName} - ${o.date} (${o.sede})</p>
-                                                </div>
-                                                <button onclick="closeModal(); openOrderDetail('${o.id}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold">Ver insumos ></button>
-                                            </div>
+                            <div class="overflow-x-auto max-h-[350px] overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase font-semibold">
+                                            <th class="py-3 px-4">Mes (AÑO-MES)</th>
+                                            <th class="py-3 px-4">Total Órdenes</th>
+                                            <th class="py-3 px-4">Insumos Solicitados</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                        ${Object.keys(monthlyStats).length === 0 ? `
+                                            <tr><td colspan="3" class="py-8 text-center text-slate-400">Sin registros mensuales aún.</td></tr>
+                                        ` : Object.keys(monthlyStats).sort().reverse().map(mk => `
+                                            <tr>
+                                                <td class="py-3 px-4 font-mono font-bold text-indigo-600">${mk}</td>
+                                                <td class="py-3 px-4">${monthlyStats[mk].totalOrders} órdenes</td>
+                                                <td class="py-3 px-4 font-bold text-slate-900">${monthlyStats[mk].totalItems} unidades</td>
+                                            </tr>
                                         `).join('')}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex justify-end pt-4 border-t border-slate-200">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        function openMonthlyAverageModal() {
-            const monthsMap = {};
-            db.orders.forEach(o => {
-                const m = o.date.substring(0, 7);
-                if (!monthsMap[m]) monthsMap[m] = [];
-                monthsMap[m].push(o);
-            });
+        // --- REPORT MODALS & EXCEL EXPORT FUNCTIONS ---
+        function openNotificationDetail(notifId) {
+            let orderId = notifId;
+            if (notifId.startsWith('NOTIF-')) {
+                const notif = state.notifications.find(n => n.id === notifId);
+                if (notif) orderId = notif.orderId;
+            } else if (notifId.startsWith('PSEUDO-')) {
+                orderId = notifId.replace('PSEUDO-', '');
+            }
 
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Promedio y Detalle Mensual</h3>
-                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
-                        </div>
-                        <p class="text-xs text-slate-500">Haz clic en un mes para ver el detalle de los insumos solicitados y descargar su Excel (.xlsx).</p>
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 col-span-2 text-center py-4">No hay datos mensuales.</p>` : Object.keys(monthsMap).sort().reverse().map(m => `
-                                <div onclick="openMonthDetailModal('${m}')" class="bg-slate-50 border border-slate-200 hover:border-indigo-600 p-4 rounded-xl cursor-pointer transition">
-                                    <h4 class="font-bold text-sm text-indigo-600 mb-1">📅 ${m}</h4>
-                                    <p class="text-xs text-slate-500">${monthsMap[m].length} pedidos realizados</p>
-                                </div>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex justify-end pt-4 border-t border-slate-200">
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function openMonthDetailModal(monthStr) {
-            const ordersInMonth = db.orders.filter(o => o.date.startsWith(monthStr));
-            const aggregated = {};
-            ordersInMonth.forEach(o => {
-                o.items.forEach(i => {
-                    if (!aggregated[i.code]) aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
-                    aggregated[i.code].totalQty += i.qtyRequested;
-                    aggregated[i.code].requestsCount += 1;
-                });
-            });
-
-            const itemsArray = Object.values(aggregated);
-
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Detalle del Mes: ${monthStr}</h3>
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <span class="text-xs font-mono font-bold text-indigo-600">${order.id}</span>
+                                <h3 class="font-bold text-lg text-slate-800">${order.userName} realizó pedido el ${order.date}</h3>
+                            </div>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
 
-                        <div class="space-y-2">
-                            ${itemsArray.length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay insumos en este mes.</p>` : itemsArray.map(i => `
-                                <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl flex justify-between items-center text-xs">
+                        <div class="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200 text-xs space-y-1.5">
+                            <p><span class="font-semibold text-slate-500">Sede y Sección:</span> <span class="font-bold text-slate-800">Sede ${order.location} (${order.section})</span></p>
+                            <p><span class="font-semibold text-slate-500">Hora del Pedido:</span> <span class="font-bold text-slate-800">${order.time}</span></p>
+                            <p><span class="font-semibold text-slate-500">Estado:</span> <span class="font-bold text-indigo-600">${order.status}</span></p>
+                        </div>
+
+                        <h4 class="font-bold text-xs uppercase text-slate-500 mb-2">Insumos Solicitados el ${order.date}:</h4>
+                        <div class="max-h-[220px] overflow-y-auto space-y-2 mb-4">
+                            ${order.items.map(it => `
+                                <div class="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
                                     <div>
-                                        <span class="font-mono text-indigo-600 font-bold">${i.code}</span>
-                                        <p class="font-semibold text-slate-800">${i.name}</p>
+                                        <span class="font-mono text-xs font-bold text-indigo-600">${it.code}</span>
+                                        <p class="text-xs font-semibold text-slate-800">${it.name}</p>
                                     </div>
                                     <div class="text-right">
-                                        <span class="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-lg font-bold">${i.totalQty} solicitados</span>
-                                        <p class="text-slate-400 mt-1">(${i.requestsCount} veces pedido)</p>
+                                        <span class="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg">${it.orderedQty} solicitados</span>
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
 
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
-                            <button onclick="downloadMonthExcel('${monthStr}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Excel (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportSingleOrderXLSX('${order.id}')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Excel (.xlsx)
+                            </button>
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        function downloadMonthExcel(monthStr) {
-            const ordersInMonth = db.orders.filter(o => o.date.startsWith(monthStr));
-            const aggregated = {};
-            ordersInMonth.forEach(o => {
-                o.items.forEach(i => {
-                    if (!aggregated[i.code]) aggregated[i.code] = { code: i.code, name: i.name, totalQty: 0, requestsCount: 0 };
-                    aggregated[i.code].totalQty += i.qtyRequested;
-                    aggregated[i.code].requestsCount += 1;
-                });
+        function exportSingleOrderXLSX(orderId) {
+            const order = state.orders.find(o => o.id === orderId);
+            if (!order) return;
+            let csv = 'Codigo,Nombre del Insumo,Cantidad Solicitada,Cantidad Entregada,Cantidad Pendiente\n';
+            order.items.forEach(it => {
+                csv += `"${it.code}","${it.name}","${it.orderedQty}","${it.deliveredQty}","${it.pendingQty}"\n`;
             });
-
-            const data = Object.values(aggregated).map(i => ({
-                "Código": i.code,
-                "Nombre del Insumo": i.name,
-                "Total Solicitado": i.totalQty,
-                "Veces Solicitado": i.requestsCount
-            }));
-
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, `Mes_${monthStr}`);
-            XLSX.writeFile(wb, `Reporte_Mensual_${monthStr}.xlsx`);
+            downloadCSV(`Pedido_${order.id}_${order.date}.xlsx`, csv);
         }
 
-        function openAnnualModal() {
-            const monthsMap = {};
-            db.orders.forEach(o => {
-                const m = o.date.substring(0, 7);
-                if (!monthsMap[m]) monthsMap[m] = [];
-                monthsMap[m].push(o);
+        function openYearlyReportModal() {
+            const currentYear = new Date().getFullYear().toString();
+            const monthlyData = {};
+            let grandTotal = 0;
+
+            state.orders.forEach(ord => {
+                if (ord.date.startsWith(currentYear)) {
+                    const mk = ord.date.substring(0, 7);
+                    if (!monthlyData[mk]) monthlyData[mk] = {};
+                    ord.items.forEach(it => {
+                        if (!monthlyData[mk][it.code]) {
+                            monthlyData[mk][it.code] = { code: it.code, name: it.name, qty: 0, times: 0 };
+                        }
+                        monthlyData[mk][it.code].qty += it.orderedQty;
+                        monthlyData[mk][it.code].times += 1;
+                        grandTotal += it.orderedQty;
+                    });
+                }
             });
 
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-2xl space-y-4 max-h-[90vh] overflow-y-auto shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Relacionado Anual y por Meses</h3>
+            const months = Object.keys(monthlyData).sort();
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Reporte Anual Detallado por Mes (${currentYear})</h3>
+                                <p class="text-xs text-slate-500">Desglose mensual de insumos solicitados y total anual.</p>
+                            </div>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <p class="text-xs text-slate-500">Desglose mensual y acumulado anual de los insumos solicitados.</p>
 
-                        <div class="space-y-4">
-                            ${Object.keys(monthsMap).length === 0 ? `<p class="text-xs text-slate-400 text-center py-4">No hay pedidos registrados este año.</p>` : Object.keys(monthsMap).sort().reverse().map(m => {
-                                const agg = {};
-                                monthsMap[m].forEach(o => {
-                                    o.items.forEach(i => {
-                                        if (!agg[i.code]) agg[i.code] = { name: i.name, qty: 0 };
-                                        agg[i.code].qty += i.qtyRequested;
-                                    });
-                                });
+                        <div class="max-h-[320px] overflow-y-auto border border-slate-200 rounded-xl mb-4 space-y-3 p-3 bg-slate-50">
+                            ${months.length === 0 ? `
+                                <div class="py-8 text-center text-slate-400 text-xs">Sin registros este año.</div>
+                            ` : months.map(mk => {
+                                const itemsObj = monthlyData[mk];
+                                const itemsArr = Object.values(itemsObj);
+                                const monthTotalQty = itemsArr.reduce((acc, i) => acc + i.qty, 0);
                                 return `
-                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
-                                        <h4 class="font-bold text-sm text-indigo-600">📅 Mes: ${m}</h4>
-                                        <div class="space-y-1">
-                                            ${Object.keys(agg).map(code => `
-                                                <div class="flex justify-between text-xs bg-white p-2 rounded border border-slate-100">
-                                                    <span><strong class="text-indigo-600">${code}</strong> - ${agg[code].name}</span>
-                                                    <span class="font-bold">${agg[code].qty} unidades</span>
+                                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+                                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                            <span class="font-mono font-bold text-indigo-600 text-xs">Mes: ${mk}</span>
+                                            <span class="text-xs font-bold text-slate-700 bg-indigo-50 px-2 py-0.5 rounded">Total Mes: ${monthTotalQty} unidades</span>
+                                        </div>
+                                        <div class="space-y-1.5">
+                                            ${itemsArr.map(it => `
+                                                <div class="flex items-center justify-between text-xs">
+                                                    <div>
+                                                        <span class="font-mono text-indigo-600 font-bold">${it.code}</span>
+                                                        <span class="font-medium text-slate-800 ml-2">${it.name}</span>
+                                                        <span class="text-[10px] text-slate-400 ml-1">(${it.times} solicitudes)</span>
+                                                    </div>
+                                                    <span class="font-bold text-slate-900">${it.qty} unidades</span>
                                                 </div>
                                             `).join('')}
                                         </div>
@@ -1084,75 +1442,336 @@
                             }).join('')}
                         </div>
 
-                        <div class="flex justify-between items-center pt-4 border-t border-slate-200">
-                            <button onclick="downloadAnnualExcel()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold rounded-xl text-white transition"><i class="fa-solid fa-file-excel mr-1.5"></i> Descargar Relacionado Anual (.xlsx)</button>
-                            <button onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        <div class="flex items-center justify-between bg-indigo-50 px-4 py-3 rounded-xl mb-4 border border-indigo-100">
+                            <span class="text-xs font-bold text-indigo-900 uppercase">Total General Anual (${currentYear}):</span>
+                            <span class="text-sm font-extrabold text-indigo-700">${grandTotal} unidades</span>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportYearlyCSV()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Reporte Excel (.xlsx)
+                            </button>
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
                         </div>
                     </div>
                 </div>
             `;
         }
 
-        function downloadAnnualExcel() {
-            const aggregated = {};
-            db.orders.forEach(o => {
-                const m = o.date.substring(0, 7);
-                o.items.forEach(i => {
-                    const key = m + '_' + i.code;
-                    if (!aggregated[key]) {
-                        aggregated[key] = { Mes: m, Código: i.code, Nombre: i.name, CantidadTotal: 0 };
-                    }
-                    aggregated[key].CantidadTotal += i.qtyRequested;
-                });
+        function exportYearlyCSV() {
+            const currentYear = new Date().getFullYear().toString();
+            const monthlyData = {};
+            let grandTotal = 0;
+
+            state.orders.forEach(ord => {
+                if (ord.date.startsWith(currentYear)) {
+                    const mk = ord.date.substring(0, 7);
+                    if (!monthlyData[mk]) monthlyData[mk] = {};
+                    ord.items.forEach(it => {
+                        if (!monthlyData[mk][it.code]) {
+                            monthlyData[mk][it.code] = { code: it.code, name: it.name, qty: 0, times: 0 };
+                        }
+                        monthlyData[mk][it.code].qty += it.orderedQty;
+                        monthlyData[mk][it.code].times += 1;
+                        grandTotal += it.orderedQty;
+                    });
+                }
             });
 
-            const data = Object.values(aggregated);
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "RelacionAnual");
-            XLSX.writeFile(wb, "Relacion_Anual_Insumos.xlsx");
+            let csv = 'Mes,Codigo Insumo,Nombre Insumo,Numero de Solicitudes,Cantidad Total en el Mes\n';
+            Object.keys(monthlyData).sort().forEach(mk => {
+                Object.values(monthlyData[mk]).forEach(it => {
+                    csv += `"${mk}","${it.code}","${it.name}","${it.times}","${it.qty}"\n`;
+                });
+            });
+            csv += `\n,,,TOTAL GENERAL ANUAL (${currentYear}),"${grandTotal}"\n`;
+
+            downloadCSV(`Reporte_Anual_Detallado_${currentYear}.xlsx`, csv);
         }
 
-        function openChangePasswordModal() {
-            const container = document.getElementById('modal-container');
-            container.innerHTML = `
-                <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div class="bg-white border border-slate-200 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-xl">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold text-slate-800">Cambiar Contraseña de Administrador</h3>
+        function openMonthlyAverageModal() {
+            const monthlyStats = {};
+            state.orders.forEach(ord => {
+                const mk = ord.date.substring(0, 7);
+                if (!monthlyStats[mk]) monthlyStats[mk] = { orders: 0, totalItems: 0 };
+                monthlyStats[mk].orders += 1;
+                ord.items.forEach(it => monthlyStats[mk].totalItems += it.orderedQty);
+            });
+
+            const months = Object.keys(monthlyStats).sort().reverse();
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Promedio y Detalle Mensual</h3>
+                                <p class="text-xs text-slate-500">Haz clic en un mes para ver el detalle de los insumos solicitados.</p>
+                            </div>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
-                        <form onsubmit="saveNewPassword(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nueva Contraseña</label>
-                                <input type="password" id="new-admin-pass" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600" placeholder="Nueva contraseña">
-                            </div>
-                            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200">
-                                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cancelar</button>
-                                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold rounded-xl text-white transition">Actualizar Contraseña</button>
-                            </div>
-                        </form>
+
+                        <div class="max-h-[350px] overflow-y-auto space-y-3 pr-1 mb-4">
+                            ${months.length === 0 ? `
+                                <div class="py-12 text-center text-slate-400 text-xs">Sin registros mensuales.</div>
+                            ` : months.map(mk => `
+                                <div onclick="openMonthDetailModal('${mk}')" class="p-4 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
+                                            <i class="fa-solid fa-calendar-check"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-slate-800 text-sm">Mes: ${mk}</h4>
+                                            <p class="text-xs text-slate-500">${monthlyStats[mk].orders} órdenes • <span class="font-semibold text-slate-700">${monthlyStats[mk].totalItems} insumos en total</span></p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs text-indigo-600 font-semibold">Ver detalle <i class="fa-solid fa-chevron-right text-[9px]"></i></span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportMonthlySummaryCSV()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Resumen (.xlsx)
+                            </button>
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
-        function saveNewPassword(e) {
-            e.preventDefault();
-            const pass = document.getElementById('new-admin-pass').value.trim();
-            let adminUser = db.users.find(u => u.role === 'admin');
-            if (adminUser) {
-                adminUser.pass = pass;
-            } else {
-                db.users.push({ name: 'Lindsay Velasco', doc: '27984352', pass: pass, role: 'admin' });
-            }
-            saveDB();
-            closeModal();
-            alert('¡Contraseña de administrador actualizada con éxito!');
+        function openMonthDetailModal(monthKey) {
+            const itemTotals = {};
+            state.orders.forEach(ord => {
+                if (ord.date.startsWith(monthKey)) {
+                    ord.items.forEach(it => {
+                        if (!itemTotals[it.code]) itemTotals[it.code] = { code: it.code, name: it.name, totalQty: 0 };
+                        itemTotals[it.code].totalQty += it.orderedQty;
+                    });
+                }
+            });
+            const itemsArray = Object.values(itemTotals);
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <span class="text-xs font-mono font-bold text-indigo-600">${monthKey}</span>
+                                <h3 class="font-bold text-lg text-slate-800">Detalle de Insumos - ${monthKey}</h3>
+                            </div>
+                            <button onclick="openMonthlyAverageModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left text-lg" title="Volver"></i></button>
+                        </div>
+
+                        <div class="max-h-[300px] overflow-y-auto border border-slate-200 rounded-xl mb-4">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 border-b border-slate-200 text-slate-400 uppercase font-semibold">
+                                    <tr>
+                                        <th class="py-3 px-4">Código</th>
+                                        <th class="py-3 px-4">Nombre del Insumo</th>
+                                        <th class="py-3 px-4 text-right">Cantidad Total Solicitada</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
+                                    ${itemsArray.length === 0 ? `
+                                        <tr><td colspan="3" class="py-8 text-center text-slate-400">Sin insumos solicitados en este mes.</td></tr>
+                                    ` : itemsArray.map(it => `
+                                        <tr>
+                                            <td class="py-3 px-4 font-mono font-bold text-indigo-600">${it.code}</td>
+                                            <td class="py-3 px-4 text-slate-900">${it.name}</td>
+                                            <td class="py-3 px-4 text-right font-bold text-slate-900">${it.totalQty}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportMonthDetailXLSX('${monthKey}')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Mes (.xlsx)
+                            </button>
+                            <button onclick="openMonthlyAverageModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Volver a Meses</button>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
-        function closeModal() {
-            document.getElementById('modal-container').innerHTML = '';
+        function exportMonthDetailXLSX(monthKey) {
+            const itemTotals = {};
+            state.orders.forEach(ord => {
+                if (ord.date.startsWith(monthKey)) {
+                    ord.items.forEach(it => {
+                        if (!itemTotals[it.code]) itemTotals[it.code] = { code: it.code, name: it.name, totalQty: 0 };
+                        itemTotals[it.code].totalQty += it.orderedQty;
+                    });
+                }
+            });
+
+            let csv = 'Codigo,Nombre del Insumo,Cantidad Total Solicitada\n';
+            Object.values(itemTotals).forEach(i => {
+                csv += `"${i.code}","${i.name}","${i.totalQty}"\n`;
+            });
+            downloadCSV(`Reporte_Mensual_${monthKey}.xlsx`, csv);
+        }
+
+        function exportMonthlySummaryCSV() {
+            const monthlyStats = {};
+            state.orders.forEach(ord => {
+                const mk = ord.date.substring(0, 7);
+                if (!monthlyStats[mk]) monthlyStats[mk] = { orders: 0, totalItems: 0 };
+                monthlyStats[mk].orders += 1;
+                ord.items.forEach(it => monthlyStats[mk].totalItems += it.orderedQty);
+            });
+
+            let csv = 'Mes,Total Ordenes,Total Insumos Solicitados\n';
+            Object.keys(monthlyStats).sort().forEach(mk => {
+                csv += `"${mk}","${monthlyStats[mk].orders}","${monthlyStats[mk].totalItems}"\n`;
+            });
+            downloadCSV('Resumen_Promedio_Mensual.xlsx', csv);
+        }
+
+        function openAllOrdersReportModal() {
+            const monthlyOrders = {};
+            state.orders.forEach(ord => {
+                const mk = ord.date.substring(0, 7);
+                if (!monthlyOrders[mk]) monthlyOrders[mk] = [];
+                monthlyOrders[mk].push(ord);
+            });
+
+            const months = Object.keys(monthlyOrders).sort().reverse();
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-bold text-lg text-slate-800">Total Pedidos Realizados por Mes</h3>
+                                <p class="text-xs text-slate-500">Selecciona un mes para ver los pedidos organizados del más reciente al más antiguo.</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+
+                        <div class="max-h-[350px] overflow-y-auto space-y-3 pr-1 mb-4">
+                            ${months.length === 0 ? `
+                                <div class="py-12 text-center text-slate-400 text-xs">No hay pedidos registrados.</div>
+                            ` : months.map(mk => `
+                                <div onclick="openMonthOrdersModal('${mk}')" class="p-4 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                                            <i class="fa-solid fa-calendar-days"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-bold text-slate-800 text-sm">Mes: ${mk}</h4>
+                                            <p class="text-xs text-slate-500">${monthlyOrders[mk].length} órdenes registradas</p>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs text-indigo-600 font-semibold">Ver pedidos <i class="fa-solid fa-chevron-right text-[9px]"></i></span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportOrdersCSV()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Excel (.xlsx)
+                            </button>
+                            <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openMonthOrdersModal(monthKey) {
+            const orders = state.orders
+                .filter(ord => ord.date.startsWith(monthKey))
+                .sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`));
+
+            const modal = document.getElementById('modal-container');
+            modal.innerHTML = `
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <span class="text-xs font-mono font-bold text-indigo-600">${monthKey}</span>
+                                <h3 class="font-bold text-lg text-slate-800">Pedidos de ${monthKey} (Orden Descendente)</h3>
+                            </div>
+                            <button onclick="openAllOrdersReportModal()" class="text-slate-400 hover:text-slate-600" title="Volver a Meses"><i class="fa-solid fa-arrow-left text-lg"></i></button>
+                        </div>
+
+                        <div class="max-h-[350px] overflow-y-auto space-y-3 pr-1 mb-4">
+                            ${orders.length === 0 ? `
+                                <div class="py-12 text-center text-slate-400 text-xs">No hay pedidos en este mes.</div>
+                            ` : orders.map(ord => `
+                                <div onclick="openNotificationDetailByName('${ord.id}')" class="p-4 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-mono text-xs font-bold text-indigo-600">${ord.id}</span>
+                                            <span class="text-xs font-bold text-slate-800">${ord.userName} realizó pedido el ${ord.date}</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 mt-1">Sede: ${ord.location} (${ord.section}) • Estado: <span class="font-semibold text-slate-700">${ord.status}</span></p>
+                                    </div>
+                                    <span class="text-xs text-indigo-600 font-semibold">Ver insumos ></span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                            <button onclick="exportMonthOrdersCSV('${monthKey}')" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2">
+                                <i class="fa-solid fa-file-excel"></i> Descargar Excel (.xlsx)
+                            </button>
+                            <button onclick="openAllOrdersReportModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Volver a Meses</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function exportMonthOrdersCSV(monthKey) {
+            let csv = 'ID Orden,Usuario,Fecha,Hora,Sede,Seccion,Estado,Codigo Insumo,Nombre Insumo,Cantidad Solicitada\n';
+            state.orders.filter(ord => ord.date.startsWith(monthKey)).forEach(ord => {
+                ord.items.forEach(i => {
+                    csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
+                });
+            });
+            downloadCSV(`Pedidos_${monthKey}.xlsx`, csv);
+        }
+
+        function openNotificationDetailByName(orderId) {
+            closeModal();
+            openNotificationDetail('PSEUDO-' + orderId);
+        }
+
+        function exportOrdersCSV() {
+            let csv = 'ID Orden,Usuario,Fecha,Hora,Sede,Seccion,Estado,Codigo Insumo,Nombre Insumo,Cantidad Solicitada\n';
+            state.orders.forEach(ord => {
+                ord.items.forEach(i => {
+                    csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
+                });
+            });
+            downloadCSV('Historial_Total_Pedidos.xlsx', csv);
+        }
+
+        function downloadCSV(filename, csvContent) {
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', filename);
+            a.style.visibility = 'hidden';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('¡Reporte exportado en formato Excel (.xlsx) con éxito!');
+        }
+
+        // --- INIT ON LOAD ---
+        window.onload = function() {
+            render();
         }
     </script>
 </body>
