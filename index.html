@@ -31,234 +31,216 @@
 
     <!-- APPLICATION JAVASCRIPT -->
     <script>
-        // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
-
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6ez94fge8ECezrydn7HG1Ne0_j4y1j_TrNXHv6OnK3wPGKosHk6lXWu-VWKG1cdbyg/exec';
+        const STORAGE_KEY = 'icv_cie_inventory_system_v7';
 
-async function syncOrderToCloud(orderData) {
-    try {
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                action: 'saveOrder',
-                ...orderData
-            })
-        });
-        showToast('¡Pedido sincronizado en la nube (Google Sheets)!', 'success');
-    } catch (err) {
-        console.error("Error al sincronizar con la nube:", err);
-        showToast('Guardado localmente en este dispositivo.', 'info');
-    }
-}
-
-async function syncInventoryToCloud() {
-    try {
-        let allItems = [];
-        ['ICV', 'CIE'].forEach(loc => {
-            ['hospitalarios', 'comercializadora'].forEach(sec => {
-                if (state.inventory[loc] && state.inventory[loc][sec]) {
-                    state.inventory[loc][sec].forEach(item => {
-                        allItems.push({
-                            location: loc,
-                            section: sec,
-                            code: item.code,
-                            name: item.name,
-                            quantity: item.quantity,
-                            minStock: item.minStock
-                        });
-                    });
+        let defaultState = {
+            currentUser: null, 
+            currentLocation: 'ICV',
+            currentSection: 'hospitalarios',
+            currentTab: 'inventario',
+            users: [
+                { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' }
+            ],
+            inventory: {
+                ICV: {
+                    hospitalarios: [
+                        { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
+                        { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
+                        { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
+                    ],
+                    comercializadora: [
+                        { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
+                        { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
+                    ]
+                },
+                CIE: {
+                    hospitalarios: [
+                        { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
+                        { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
+                    ],
+                    comercializadora: [
+                        { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
+                        { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
+                    ]
                 }
-            });
-        });
+            },
+            orders: [], 
+            notifications: [], 
+            cart: []
+        };
 
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                action: 'saveInventory',
-                items: allItems
-            })
-        });
-    } catch (err) {
-        console.error("Error sincronizando inventario:", err);
-    }
-}
-        // Función para aplanar y subir todo el inventario actual de ICV y CIE a la nube
-async function syncInventoryToCloud() {
-    try {
-        let allItems = [];
-        // Recorrer sedes y secciones para unificar el inventario en un solo array
-        ['ICV', 'CIE'].forEach(loc => {
-            ['hospitalarios', 'comercializadora'].forEach(sec => {
-                if (state.inventory[loc] && state.inventory[loc][sec]) {
-                    state.inventory[loc][sec].forEach(item => {
-                        allItems.push({
-                            location: loc,
-                            section: sec,
-                            code: item.code,
-                            name: item.name,
-                            quantity: item.quantity,
-                            minStock: item.minStock
-                        });
-                    });
-                }
-            });
-        });
-
-        await fetch(WEB_APP_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'saveInventory',
-                items: allItems
-            })
-        });
-    } catch (err) {
-        console.error("Error sincronizando inventario:", err);
-    }
-}
-
-async function sincronizarDesdeGoogleSheets() {
-    try {
-        // El parámetro &t=... evita que el celular cargue caché viejo
-        const response = await fetch(`${WEB_APP_URL}?action=getData&t=${Date.now()}`, {
-            method: 'GET',
-            redirect: 'follow'
-        });
-        
-        if (!response.ok) throw new Error("Error de red al conectar con Sheets");
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            if (result.orders && result.orders.length > 0) {
-                state.orders = result.orders.map(o => ({
-                    id: o.id,
-                    location: o.location,
-                    section: o.section,
-                    userName: o.userName,
-                    date: o.date,
-                    time: o.time,
-                    status: o.status,
-                    items: o.itemsText ? o.itemsText.split(' | ').map(str => {
-                        return { 
-                            code: str.split(' - ')[0], 
-                            name: str.split(' - ')[1]?.split(' (Cant:')[0] || '', 
-                            orderedQty: parseInt(str.split('Cant: ')[1]) || 1, 
-                            deliveredQty: 0, 
-                            pendingQty: 0 
-                        };
-                    }) : []
-                }));
+        // --- SINCRONIZACIÓN CON GOOGLE SHEETS ---
+        async function syncOrderToCloud(orderData) {
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'saveOrder',
+                        ...orderData
+                    })
+                });
+                showToast('¡Pedido sincronizado en la nube (Google Sheets)!', 'success');
+            } catch (err) {
+                console.error("Error al sincronizar pedido con la nube:", err);
+                showToast('Guardado localmente en este dispositivo.', 'info');
             }
+        }
 
-            if (result.inventory && result.inventory.length > 0) {
-                let cloudInventory = {
-                    ICV: { hospitalarios: [], comercializadora: [] },
-                    CIE: { hospitalarios: [], comercializadora: [] }
-                };
-
-                result.inventory.forEach(i => {
-                    if (cloudInventory[i.location] && cloudInventory[i.location][i.section]) {
-                        cloudInventory[i.location][i.section].push({
-                            code: i.code,
-                            name: i.name,
-                            quantity: Number(i.quantity),
-                            minStock: Number(i.minStock)
-                        });
-                    }
+        // ÚNICA función syncInventoryToCloud (sin duplicados y con text/plain para evitar bloqueos CORS)
+        async function syncInventoryToCloud() {
+            try {
+                let allItems = [];
+                ['ICV', 'CIE'].forEach(loc => {
+                    ['hospitalarios', 'comercializadora'].forEach(sec => {
+                        if (state.inventory && state.inventory[loc] && Array.isArray(state.inventory[loc][sec])) {
+                            state.inventory[loc][sec].forEach(item => {
+                                allItems.push({
+                                    location: String(loc),
+                                    section: String(sec),
+                                    code: String(item.code || ''),
+                                    name: String(item.name || ''),
+                                    quantity: Number(item.quantity) || 0,
+                                    minStock: Number(item.minStock) || 0
+                                });
+                            });
+                        }
+                    });
                 });
 
-                state.inventory = cloudInventory;
-                showToast('Inventario sincronizado con la nube', 'info');
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'saveInventory',
+                        items: allItems
+                    })
+                });
+            } catch (err) {
+                console.error("Error sincronizando inventario:", err);
             }
-
-            saveState();
-            render();
         }
-    } catch (err) {
-        console.error("Error al descargar de Google Sheets:", err);
-    }
-}
-        
-const STORAGE_KEY = 'icv_cie_inventory_system_v6';
 
-let defaultState = {
-    currentUser: null, 
-    currentLocation: 'ICV',
-    currentSection: 'hospitalarios',
-    currentTab: 'inventario',
-    users: [
-        { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' }
-    ],
-    inventory: {
-        ICV: {
-            hospitalarios: [
-                { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
-                { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
-                { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
-            ],
-            comercializadora: [
-                { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
-                { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
-            ]
-        },
-        CIE: {
-            hospitalarios: [
-                { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
-                { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
-            ],
-            comercializadora: [
-                { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
-                { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
-            ]
-        }
-    },
-    orders: [], 
-    notifications: [], 
-    cart: []
-};
+        async function sincronizarDesdeGoogleSheets() {
+            try {
+                const response = await fetch(`${WEB_APP_URL}?action=getData&t=${Date.now()}`, {
+                    method: 'GET',
+                    redirect: 'follow'
+                });
+                
+                if (!response.ok) throw new Error("Error de red al conectar con Sheets");
+                const result = await response.json();
+                
+                if (result && result.status === 'success') {
+                    if (Array.isArray(result.orders) && result.orders.length > 0) {
+                        state.orders = result.orders.map(o => {
+                            let cleanDate = String(o.date || new Date().toISOString().split('T')[0]);
+                            if (cleanDate.includes('T')) cleanDate = cleanDate.split('T')[0];
 
-// --- CARGAR ESTADO DESDE LOCALSTORAGE ---
-function loadState() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            return {
-                ...defaultState,
-                ...parsed,
-                inventory: {
-                    ICV: {
-                        hospitalarios: parsed?.inventory?.ICV?.hospitalarios || defaultState.inventory.ICV.hospitalarios,
-                        comercializadora: parsed?.inventory?.ICV?.comercializadora || defaultState.inventory.ICV.comercializadora
-                    },
-                    CIE: {
-                        hospitalarios: parsed?.inventory?.CIE?.hospitalarios || defaultState.inventory.CIE.hospitalarios,
-                        comercializadora: parsed?.inventory?.CIE?.comercializadora || defaultState.inventory.CIE.comercializadora
+                            return {
+                                id: String(o.id || 'ORD-' + Date.now()),
+                                location: String(o.location || 'ICV'),
+                                section: String(o.section || 'hospitalarios'),
+                                userName: String(o.userName || 'Usuario'),
+                                date: cleanDate,
+                                time: String(o.time || '00:00:00'),
+                                status: String(o.status || 'Pendiente'),
+                                items: o.itemsText ? String(o.itemsText).split(' | ').map(str => {
+                                    const parts = str.split(' - ');
+                                    const codePart = String(parts[0] || '').trim();
+                                    const restPart = String(parts[1] || '');
+                                    const namePart = restPart.split(' (Cant:')[0] || '';
+                                    const qtyPart = parseInt(str.split('Cant: ')[1]) || 1;
+                                    return { 
+                                        code: codePart, 
+                                        name: namePart, 
+                                        orderedQty: qtyPart, 
+                                        deliveredQty: 0, 
+                                        pendingQty: qtyPart 
+                                    };
+                                }) : []
+                            };
+                        });
                     }
-                },
-                orders: Array.isArray(parsed?.orders) ? parsed.orders : [],
-                notifications: Array.isArray(parsed?.notifications) ? parsed.notifications : [],
-                cart: Array.isArray(parsed?.cart) ? parsed.cart : []
-            };
+
+                    if (Array.isArray(result.inventory) && result.inventory.length > 0) {
+                        let cloudInventory = {
+                            ICV: { hospitalarios: [], comercializadora: [] },
+                            CIE: { hospitalarios: [], comercializadora: [] }
+                        };
+
+                        result.inventory.forEach(i => {
+                            const loc = String(i.location || '').trim();
+                            const sec = String(i.section || '').trim();
+                            if (cloudInventory[loc] && cloudInventory[loc][sec]) {
+                                cloudInventory[loc][sec].push({
+                                    code: String(i.code || ''),
+                                    name: String(i.name || ''),
+                                    quantity: Number(i.quantity) || 0,
+                                    minStock: Number(i.minStock) || 0
+                                });
+                            }
+                        });
+
+                        state.inventory = cloudInventory;
+                        showToast('Inventario sincronizado con la nube', 'info');
+                    }
+
+                    saveState();
+                    render();
+                }
+            } catch (err) {
+                console.error("Error al descargar de Google Sheets:", err);
+            }
         }
-    } catch (e) {
-        console.error("Error cargando estado local, restaurando valores por defecto:", e);
-        localStorage.removeItem(STORAGE_KEY);
-    }
-    return defaultState;
-}
 
-// ÚNICA declaración de state
-let state = loadState();
+        // --- CARGAR ESTADO BLINDADO CONTRA PANTALLAS EN BLANCO ---
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    return {
+                        ...defaultState,
+                        ...parsed,
+                        currentUser: parsed?.currentUser || null,
+                        currentLocation: (parsed?.currentLocation === 'ICV' || parsed?.currentLocation === 'CIE') ? parsed.currentLocation : 'ICV',
+                        currentSection: (parsed?.currentSection === 'hospitalarios' || parsed?.currentSection === 'comercializadora') ? parsed.currentSection : 'hospitalarios',
+                        currentTab: parsed?.currentTab || 'inventario',
+                        inventory: {
+                            ICV: {
+                                hospitalarios: Array.isArray(parsed?.inventory?.ICV?.hospitalarios) ? parsed.inventory.ICV.hospitalarios : defaultState.inventory.ICV.hospitalarios,
+                                comercializadora: Array.isArray(parsed?.inventory?.ICV?.comercializadora) ? parsed.inventory.ICV.comercializadora : defaultState.inventory.ICV.comercializadora
+                            },
+                            CIE: {
+                                hospitalarios: Array.isArray(parsed?.inventory?.CIE?.hospitalarios) ? parsed.inventory.CIE.hospitalarios : defaultState.inventory.CIE.hospitalarios,
+                                comercializadora: Array.isArray(parsed?.inventory?.CIE?.comercializadora) ? parsed.inventory.CIE.comercializadora : defaultState.inventory.CIE.comercializadora
+                            }
+                        },
+                        orders: Array.isArray(parsed?.orders) ? parsed.orders : [],
+                        notifications: Array.isArray(parsed?.notifications) ? parsed.notifications : [],
+                        cart: Array.isArray(parsed?.cart) ? parsed.cart : []
+                    };
+                }
+            } catch (e) {
+                console.error("Error cargando estado local, restaurando valores por defecto:", e);
+                localStorage.removeItem(STORAGE_KEY);
+            }
+            return defaultState;
+        }
 
-function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+        let state = loadState();
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.error("Error guardando en localStorage:", e);
+            }
+        }
 
         // --- TOAST NOTIFICATIONS ---
         function showToast(message, type = 'success') {
@@ -293,16 +275,24 @@ function saveState() {
 
         // --- RENDER ROUTER ---
         function render() {
-            const app = document.getElementById('app');
-            if (!state.currentUser) {
-                app.innerHTML = renderAuthScreen();
-            } else {
-                app.innerHTML = renderMainDashboard();
+            try {
+                const app = document.getElementById('app');
+                if (!app) return;
+                if (!state.currentUser) {
+                    app.innerHTML = renderAuthScreen();
+                } else {
+                    app.innerHTML = renderMainDashboard();
+                }
+            } catch (err) {
+                console.error("Error crítico de renderizado:", err);
+                localStorage.removeItem(STORAGE_KEY);
+                state = defaultState;
+                document.getElementById('app').innerHTML = renderAuthScreen();
             }
         }
 
         // --- AUTH SCREEN ---
-        let authMode = 'login'; // 'login' or 'register'
+        let authMode = 'login';
 
         function renderAuthScreen() {
             return `
@@ -316,7 +306,6 @@ function saveState() {
                             <p class="text-slate-500 text-sm mt-1">Sistema de Control de Inventarios y Pedidos</p>
                         </div>
 
-                        <!-- Tabs -->
                         <div class="flex rounded-xl bg-slate-100 p-1 mb-6">
                             <button onclick="setAuthMode('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'login' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Iniciar Sesión</button>
                             <button onclick="setAuthMode('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${authMode === 'register' ? 'bg-white text-indigo-600 shadow' : 'text-slate-600 hover:text-slate-900'}">Registrarse</button>
@@ -407,8 +396,8 @@ function saveState() {
             }
 
             const found = state.users.find(u => {
-                const matchDoc = u.document && u.document.toLowerCase() === inputId;
-                const matchUser = u.username && u.username.toLowerCase() === inputId;
+                const matchDoc = u.document && String(u.document).toLowerCase() === inputId;
+                const matchUser = u.username && String(u.username).toLowerCase() === inputId;
                 return (matchDoc || matchUser) && u.password === pass;
             });
 
@@ -450,11 +439,10 @@ function saveState() {
 
         // --- MAIN DASHBOARD ---
         function renderMainDashboard() {
-            const isAdmin = state.currentUser.role === 'admin';
-            const unreadNotifs = state.notifications.filter(n => !n.read).length;
+            const isAdmin = state.currentUser && state.currentUser.role === 'admin';
+            const unreadNotifs = (state.notifications || []).filter(n => !n.read).length;
 
             return `
-                <!-- Top Navbar -->
                 <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -474,7 +462,6 @@ function saveState() {
                             </button>
                             ` : ''}
 
-                            <!-- User Badge -->
                             <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl">
                                 <div class="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-xs">
                                     <i class="fa-solid fa-user"></i>
@@ -485,7 +472,6 @@ function saveState() {
                                 </div>
                             </div>
 
-                            <!-- Logout Button -->
                             <button onclick="logout()" title="Cerrar Sesión" class="p-2.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 transition">
                                 <i class="fa-solid fa-power-off"></i>
                             </button>
@@ -493,10 +479,8 @@ function saveState() {
                     </div>
                 </header>
 
-                <!-- Sub-Header Sede & Seccion Bar -->
                 <div class="bg-indigo-900 text-white shadow-inner">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <!-- Sede Toggle -->
                         <div class="flex items-center gap-2">
                             <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sede:</span>
                             <button onclick="switchLocation('ICV')" class="px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${state.currentLocation === 'ICV' ? 'bg-white text-indigo-950' : 'bg-indigo-800 text-indigo-200 hover:bg-indigo-700'}">
@@ -507,7 +491,6 @@ function saveState() {
                             </button>
                         </div>
 
-                        <!-- Seccion Toggle -->
                         <div class="flex items-center gap-2">
                             <span class="text-xs uppercase tracking-wider text-indigo-300 font-semibold mr-1">Sección:</span>
                             <button onclick="switchSection('hospitalarios')" class="px-3.5 py-2 rounded-xl text-xs font-semibold transition ${state.currentSection === 'hospitalarios' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-800/60 text-indigo-200 hover:bg-indigo-700'}">
@@ -520,7 +503,6 @@ function saveState() {
                     </div>
                 </div>
 
-                <!-- Navigation Tabs -->
                 <div class="bg-white border-b border-slate-200 shadow-sm">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto">
                         <button onclick="switchTab('inventario')" class="py-4 px-5 border-b-2 font-semibold text-sm flex items-center gap-2 whitespace-nowrap transition ${state.currentTab === 'inventario' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}">
@@ -541,7 +523,6 @@ function saveState() {
                     </div>
                 </div>
 
-                <!-- Content Body -->
                 <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
@@ -553,8 +534,13 @@ function saveState() {
                                 <p class="text-xs text-slate-500">Los datos mostrados corresponden exclusivamente a esta selección y sede.</p>
                             </div>
                         </div>
-                        <div class="text-xs font-semibold bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 shadow-sm">
-                            Usuario: ${state.currentUser.name}
+                        <div class="flex items-center gap-2">
+                            <button onclick="sincronizarDesdeGoogleSheets()" class="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-rotate"></i> Sincronizar Nube
+                            </button>
+                            <div class="text-xs font-semibold bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 shadow-sm">
+                                Usuario: ${state.currentUser.name}
+                            </div>
                         </div>
                     </div>
 
@@ -577,7 +563,7 @@ function saveState() {
 
         function switchTab(tab) {
             state.currentTab = tab;
-            if(tab === 'reportes' && state.currentUser.role === 'admin') {
+            if(tab === 'reportes' && state.currentUser && state.currentUser.role === 'admin') {
                 state.notifications.forEach(n => n.read = true);
                 saveState();
             }
@@ -599,7 +585,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-lg text-slate-800">Cambiar Contraseña de Administrador</h3>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -648,16 +634,19 @@ function saveState() {
         let inventorySearchQuery = '';
 
         function renderInventoryTab() {
+            if (!state.inventory) state.inventory = defaultState.inventory;
+            if (!state.inventory[state.currentLocation]) state.inventory[state.currentLocation] = { hospitalarios: [], comercializadora: [] };
+            if (!Array.isArray(state.inventory[state.currentLocation][state.currentSection])) state.inventory[state.currentLocation][state.currentSection] = [];
+
             const items = state.inventory[state.currentLocation][state.currentSection];
             const filtered = items.filter(i => 
-                i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
-                i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+                String(i.code || '').toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                String(i.name || '').toLowerCase().includes(inventorySearchQuery.toLowerCase())
             );
-            const isAdmin = state.currentUser.role === 'admin';
+            const isAdmin = state.currentUser && state.currentUser.role === 'admin';
 
             return `
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <!-- Header Actions -->
                     <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                         <div class="relative flex-1 max-w-md">
                             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400"><i class="fa-solid fa-search"></i></span>
@@ -675,7 +664,6 @@ function saveState() {
                         </div>
                     </div>
 
-                    <!-- Table -->
                     <div class="overflow-x-auto" id="inventory-table-container">
                         ${renderInventoryTableHTML(filtered, isAdmin)}
                     </div>
@@ -686,18 +674,18 @@ function saveState() {
         function renderInventoryTableOnly() {
             const container = document.getElementById('inventory-table-container');
             if(container) {
-                const items = state.inventory[state.currentLocation][state.currentSection];
+                const items = state.inventory[state.currentLocation][state.currentSection] || [];
                 const filtered = items.filter(i => 
-                    i.code.toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
-                    i.name.toLowerCase().includes(inventorySearchQuery.toLowerCase())
+                    String(i.code || '').toLowerCase().includes(inventorySearchQuery.toLowerCase()) || 
+                    String(i.name || '').toLowerCase().includes(inventorySearchQuery.toLowerCase())
                 );
-                const isAdmin = state.currentUser.role === 'admin';
+                const isAdmin = state.currentUser && state.currentUser.role === 'admin';
                 container.innerHTML = renderInventoryTableHTML(filtered, isAdmin);
             }
         }
 
         function renderInventoryTableHTML(items, isAdmin) {
-            if (items.length === 0) {
+            if (!items || items.length === 0) {
                 return `
                     <div class="py-12 text-center text-slate-400">
                         <i class="fa-solid fa-box-open text-4xl mb-3"></i>
@@ -721,7 +709,7 @@ function saveState() {
                         ${items.map(item => {
                             let badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
                             let statusText = 'Stock Óptimo';
-                            if (item.quantity <= item.minStock) {
+                            if (Number(item.quantity) <= Number(item.minStock)) {
                                 badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
                                 statusText = 'Stock Bajo';
                             }
@@ -737,7 +725,6 @@ function saveState() {
                                     </td>
                                     <td class="py-4 px-6 text-right">
                                         <div class="inline-flex items-center bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200 justify-end">
-                                            <!-- Botón Usar Insumo / Registrar Consumo (Disponible para cualquier usuario en turno) -->
                                             <button onclick="openConsumeProductModal('${item.code}')" title="Registrar consumo / Usar insumo" class="px-3 py-1.5 bg-white hover:bg-amber-50 hover:text-amber-700 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5">
                                                 <i class="fa-solid fa-minus text-xs text-amber-600"></i> Usar
                                             </button>
@@ -759,16 +746,15 @@ function saveState() {
             `;
         }
 
-        // --- MODAL Y FUNCIÓN PARA REGISTRAR CONSUMO / USAR INSUMO ---
         function openConsumeProductModal(code) {
             const list = state.inventory[state.currentLocation][state.currentSection];
-            const item = list.find(i => i.code === code);
+            const item = list.find(i => String(i.code) === String(code));
             if (!item) return;
 
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <span class="font-mono text-xs font-bold text-indigo-600">${item.code}</span>
@@ -797,7 +783,7 @@ function saveState() {
             e.preventDefault();
             const consumeQty = parseInt(document.getElementById('consume-qty').value);
             const list = state.inventory[state.currentLocation][state.currentSection];
-            const item = list.find(i => i.code === code);
+            const item = list.find(i => String(i.code) === String(code));
 
             if (item) {
                 if (consumeQty > item.quantity) {
@@ -817,7 +803,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-lg text-slate-800">Agregar Nuevo Insumo</h3>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -859,7 +845,7 @@ function saveState() {
             const minStock = parseInt(document.getElementById('new-min').value);
 
             const list = state.inventory[state.currentLocation][state.currentSection];
-            if (list.some(i => i.code === code)) {
+            if (list.some(i => String(i.code) === code)) {
                 showToast('Ya existe un insumo con este código en la sección.', 'error');
                 return;
             }
@@ -868,16 +854,15 @@ function saveState() {
             saveState();
             syncInventoryToCloud();
             closeModal();
-            showToast('¡Insumo agregado con éxito a la base de datos!');
+            showToast('¡Insumo agregado con éxito y sincronizado!');
             render();
         }
 
-        // --- CARGA MASIVA DE INSUMOS (EXCEL) ---
         function openBulkUploadModal() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-bold text-lg text-slate-800">Carga Masiva de Insumos</h3>
@@ -889,7 +874,7 @@ function saveState() {
                         <div class="space-y-4">
                             <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-xs text-indigo-900 space-y-2">
                                 <p class="font-bold"><i class="fa-solid fa-circle-info mr-1"></i> Instrucciones:</p>
-                                <p>Sube un archivo Excel (.xlsx o .csv) que contenga las siguientes columnas con sus respectivos encabezados:</p>
+                                <p>Sube un archivo Excel (.xlsx o .csv) que contenga las siguientes columnas:</p>
                                 <p class="font-mono bg-white p-2 rounded border border-indigo-200 text-indigo-900">Codigo | Nombre | Cantidad | StockMinimo</p>
                             </div>
 
@@ -962,7 +947,7 @@ function saveState() {
                         const minStock = parseInt(row['StockMinimo'] || row['stockminimo'] || row['MinStock'] || 20);
 
                         if (code && name) {
-                            const existing = list.find(i => i.code === code);
+                            const existing = list.find(i => String(i.code) === code);
                             if (existing) {
                                 existing.name = name;
                                 existing.quantity += isNaN(quantity) ? 0 : quantity;
@@ -983,7 +968,7 @@ function saveState() {
                     saveState();
                     syncInventoryToCloud();
                     closeModal();
-                    showToast(`¡Carga masiva completada! Se agregaron ${addedCount} nuevos insumos y se actualizaron ${updatedCount}.`);
+                    showToast(`¡Carga masiva completada! Se agregaron ${addedCount} nuevos y se actualizaron ${updatedCount}.`);
                     render();
                 } catch (err) {
                     console.error(err);
@@ -996,13 +981,13 @@ function saveState() {
 
         function openEditProductModal(code) {
             const list = state.inventory[state.currentLocation][state.currentSection];
-            const item = list.find(i => i.code === code);
+            const item = list.find(i => String(i.code) === String(code));
             if (!item) return;
 
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-lg text-slate-800">Modificar Insumo</h3>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -1044,12 +1029,12 @@ function saveState() {
 
             const list = state.inventory[state.currentLocation][state.currentSection];
 
-            if (newCode !== oldCode && list.some(i => i.code === newCode)) {
+            if (newCode !== String(oldCode) && list.some(i => String(i.code) === newCode)) {
                 showToast('Ya existe otro insumo con este código en la sección.', 'error');
                 return;
             }
 
-            const item = list.find(i => i.code === oldCode);
+            const item = list.find(i => String(i.code) === String(oldCode));
             if (item) {
                 item.code = newCode;
                 item.name = name;
@@ -1065,7 +1050,7 @@ function saveState() {
 
         function deleteProduct(code) {
             const list = state.inventory[state.currentLocation][state.currentSection];
-            const idx = list.findIndex(i => i.code === code);
+            const idx = list.findIndex(i => String(i.code) === String(code));
             if (idx !== -1) {
                 list.splice(idx, 1);
                 saveState();
@@ -1083,15 +1068,18 @@ function saveState() {
         let orderSearchQuery = '';
 
         function renderOrderTab() {
+            if (!state.inventory) state.inventory = defaultState.inventory;
+            if (!state.inventory[state.currentLocation]) state.inventory[state.currentLocation] = { hospitalarios: [], comercializadora: [] };
+            if (!Array.isArray(state.inventory[state.currentLocation][state.currentSection])) state.inventory[state.currentLocation][state.currentSection] = [];
+
             const items = state.inventory[state.currentLocation][state.currentSection];
             const filtered = items.filter(i => 
-                i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
-                i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+                String(i.code || '').toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                String(i.name || '').toLowerCase().includes(orderSearchQuery.toLowerCase())
             );
 
             return `
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- Products Selection Column -->
                     <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="font-bold text-slate-800 text-base">Seleccionar Insumos para Pedido</h3>
@@ -1107,7 +1095,6 @@ function saveState() {
                         </div>
                     </div>
 
-                    <!-- Cart / Active Order Column -->
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
@@ -1150,17 +1137,17 @@ function saveState() {
         function renderOrderProductsOnly() {
             const container = document.getElementById('order-products-container');
             if(container) {
-                const items = state.inventory[state.currentLocation][state.currentSection];
+                const items = state.inventory[state.currentLocation][state.currentSection] || [];
                 const filtered = items.filter(i => 
-                    i.code.toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
-                    i.name.toLowerCase().includes(orderSearchQuery.toLowerCase())
+                    String(i.code || '').toLowerCase().includes(orderSearchQuery.toLowerCase()) || 
+                    String(i.name || '').toLowerCase().includes(orderSearchQuery.toLowerCase())
                 );
                 container.innerHTML = renderOrderProductsHTML(filtered);
             }
         }
 
         function renderOrderProductsHTML(items) {
-            if (items.length === 0) {
+            if (!items || items.length === 0) {
                 return `<div class="py-8 text-center text-slate-400 text-xs">No hay insumos coincidentes.</div>`;
             }
 
@@ -1175,7 +1162,7 @@ function saveState() {
                             </div>
                             <div class="flex items-center gap-2">
                                 <input type="number" id="qty-${item.code}" min="1" value="1" class="w-20 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-center focus:outline-none focus:border-indigo-600">
-                                <button onclick="addToCart('${item.code}', '${item.name.replace(/'/g, "\\'")}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5 whitespace-nowrap">
+                                <button onclick="addToCart('${item.code}', '${String(item.name).replace(/'/g, "\\'")}')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-1.5 whitespace-nowrap">
                                     <i class="fa-solid fa-plus"></i> Añadir
                                 </button>
                             </div>
@@ -1193,11 +1180,11 @@ function saveState() {
                 return;
             }
 
-            const existing = state.cart.find(i => i.code === code);
+            const existing = state.cart.find(i => String(i.code) === String(code));
             if (existing) {
                 existing.qty += qty;
             } else {
-                state.cart.push({ code, name, qty });
+                state.cart.push({ code: String(code), name: String(name), qty });
             }
             showToast(`Insumo ${code} añadido al carrito.`);
             render();
@@ -1258,7 +1245,7 @@ function saveState() {
 
         // --- TAB 3: SEGUIMIENTO Y RECEPCIÓN ---
         function renderTrackingTab() {
-            const orders = state.orders;
+            const orders = state.orders || [];
 
             return `
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6">
@@ -1317,7 +1304,7 @@ function saveState() {
                                                     </tr>
                                                 </thead>
                                                 <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
-                                                    ${order.items.map(item => `
+                                                    ${(order.items || []).map(item => `
                                                         <tr>
                                                             <td class="py-2.5 px-3 font-mono text-indigo-600">${item.code}</td>
                                                             <td class="py-2.5 px-3 text-slate-900">${item.name}</td>
@@ -1345,11 +1332,11 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-bold text-lg text-slate-800">Registrar Recepción - ${order.id}</h3>
-                                <p class="text-xs text-slate-500">Ingresa las cantidades que acaban de llegar para actualizar el inventario y pendientes.</p>
+                                <p class="text-xs text-slate-500">Ingresa las cantidades que acaban de llegar para actualizar el inventario.</p>
                             </div>
                             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
                         </div>
@@ -1399,7 +1386,7 @@ function saveState() {
                     item.deliveredQty += arrivedNow;
                     item.pendingQty -= arrivedNow;
 
-                    const invItem = state.inventory[order.location][order.section].find(i => i.code === item.code);
+                    const invItem = state.inventory[order.location][order.section].find(i => String(i.code) === String(item.code));
                     if (invItem) {
                         invItem.quantity += arrivedNow;
                     }
@@ -1421,19 +1408,20 @@ function saveState() {
 
         // --- TAB 4: PANEL ADMIN & REPORTES ---
         function renderReportsTab() {
-            const orders = state.orders;
+            const orders = state.orders || [];
             const monthlyStats = {};
             let totalRequestedAllTime = 0;
 
             orders.forEach(ord => {
-                const monthKey = ord.date.substring(0, 7);
+                const dateStr = String(ord.date || '');
+                const monthKey = dateStr.length >= 7 ? dateStr.substring(0, 7) : 'Sin-Fecha';
                 if (!monthlyStats[monthKey]) {
                     monthlyStats[monthKey] = { totalOrders: 0, totalItems: 0 };
                 }
                 monthlyStats[monthKey].totalOrders += 1;
-                ord.items.forEach(it => {
-                    monthlyStats[monthKey].totalItems += it.orderedQty;
-                    totalRequestedAllTime += it.orderedQty;
+                (ord.items || []).forEach(it => {
+                    monthlyStats[monthKey].totalItems += Number(it.orderedQty) || 0;
+                    totalRequestedAllTime += Number(it.orderedQty) || 0;
                 });
             });
 
@@ -1449,7 +1437,6 @@ function saveState() {
 
             return `
                 <div class="space-y-6">
-                    <!-- Analytics Grid (Clickable Cards) -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div onclick="openYearlyReportModal()" class="cursor-pointer bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:border-indigo-600 hover:shadow-md transition flex items-center gap-4 group">
                             <div class="p-4 rounded-2xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white text-indigo-600 text-xl font-bold transition">
@@ -1482,9 +1469,7 @@ function saveState() {
                         </div>
                     </div>
 
-                    <!-- Notifications & Activity Log -->
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Notifications -->
                         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
@@ -1513,7 +1498,6 @@ function saveState() {
                             </div>
                         </div>
 
-                        <!-- Monthly Breakdown Table -->
                         <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
                             <div class="flex items-center justify-between mb-4">
                                 <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
@@ -1565,7 +1549,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <span class="text-xs font-mono font-bold text-indigo-600">${order.id}</span>
@@ -1622,8 +1606,8 @@ function saveState() {
             let grandTotal = 0;
 
             state.orders.forEach(ord => {
-                if (ord.date.startsWith(currentYear)) {
-                    const mk = ord.date.substring(0, 7);
+                if (String(ord.date).startsWith(currentYear)) {
+                    const mk = String(ord.date).substring(0, 7);
                     if (!monthlyData[mk]) monthlyData[mk] = {};
                     ord.items.forEach(it => {
                         if (!monthlyData[mk][it.code]) {
@@ -1641,7 +1625,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-bold text-lg text-slate-800">Reporte Anual Detallado por Mes (${currentYear})</h3>
@@ -1702,8 +1686,8 @@ function saveState() {
             let grandTotal = 0;
 
             state.orders.forEach(ord => {
-                if (ord.date.startsWith(currentYear)) {
-                    const mk = ord.date.substring(0, 7);
+                if (String(ord.date).startsWith(currentYear)) {
+                    const mk = String(ord.date).substring(0, 7);
                     if (!monthlyData[mk]) monthlyData[mk] = {};
                     ord.items.forEach(it => {
                         if (!monthlyData[mk][it.code]) {
@@ -1730,7 +1714,7 @@ function saveState() {
         function openMonthlyAverageModal() {
             const monthlyStats = {};
             state.orders.forEach(ord => {
-                const mk = ord.date.substring(0, 7);
+                const mk = String(ord.date).substring(0, 7);
                 if (!monthlyStats[mk]) monthlyStats[mk] = { orders: 0, totalItems: 0 };
                 monthlyStats[mk].orders += 1;
                 ord.items.forEach(it => monthlyStats[mk].totalItems += it.orderedQty);
@@ -1741,7 +1725,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-bold text-lg text-slate-800">Promedio y Detalle Mensual</h3>
@@ -1783,7 +1767,7 @@ function saveState() {
         function openMonthDetailModal(monthKey) {
             const itemTotals = {};
             state.orders.forEach(ord => {
-                if (ord.date.startsWith(monthKey)) {
+                if (String(ord.date).startsWith(monthKey)) {
                     ord.items.forEach(it => {
                         if (!itemTotals[it.code]) itemTotals[it.code] = { code: it.code, name: it.name, totalQty: 0 };
                         itemTotals[it.code].totalQty += it.orderedQty;
@@ -1795,7 +1779,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <span class="text-xs font-mono font-bold text-indigo-600">${monthKey}</span>
@@ -1841,7 +1825,7 @@ function saveState() {
         function exportMonthDetailXLSX(monthKey) {
             const itemTotals = {};
             state.orders.forEach(ord => {
-                if (ord.date.startsWith(monthKey)) {
+                if (String(ord.date).startsWith(monthKey)) {
                     ord.items.forEach(it => {
                         if (!itemTotals[it.code]) itemTotals[it.code] = { code: it.code, name: it.name, totalQty: 0 };
                         itemTotals[it.code].totalQty += it.orderedQty;
@@ -1859,7 +1843,7 @@ function saveState() {
         function exportMonthlySummaryCSV() {
             const monthlyStats = {};
             state.orders.forEach(ord => {
-                const mk = ord.date.substring(0, 7);
+                const mk = String(ord.date).substring(0, 7);
                 if (!monthlyStats[mk]) monthlyStats[mk] = { orders: 0, totalItems: 0 };
                 monthlyStats[mk].orders += 1;
                 ord.items.forEach(it => monthlyStats[mk].totalItems += it.orderedQty);
@@ -1875,7 +1859,7 @@ function saveState() {
         function openAllOrdersReportModal() {
             const monthlyOrders = {};
             state.orders.forEach(ord => {
-                const mk = ord.date.substring(0, 7);
+                const mk = String(ord.date).substring(0, 7);
                 if (!monthlyOrders[mk]) monthlyOrders[mk] = [];
                 monthlyOrders[mk].push(ord);
             });
@@ -1885,7 +1869,7 @@ function saveState() {
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-bold text-lg text-slate-800">Total Pedidos Realizados por Mes</h3>
@@ -1926,13 +1910,13 @@ function saveState() {
 
         function openMonthOrdersModal(monthKey) {
             const orders = state.orders
-                .filter(ord => ord.date.startsWith(monthKey))
+                .filter(ord => String(ord.date).startsWith(monthKey))
                 .sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`));
 
             const modal = document.getElementById('modal-container');
             modal.innerHTML = `
                 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <span class="text-xs font-mono font-bold text-indigo-600">${monthKey}</span>
@@ -1971,7 +1955,7 @@ function saveState() {
 
         function exportMonthOrdersCSV(monthKey) {
             let csv = 'ID Orden,Usuario,Fecha,Hora,Sede,Seccion,Estado,Codigo Insumo,Nombre Insumo,Cantidad Solicitada\n';
-            state.orders.filter(ord => ord.date.startsWith(monthKey)).forEach(ord => {
+            state.orders.filter(ord => String(ord.date).startsWith(monthKey)).forEach(ord => {
                 ord.items.forEach(i => {
                     csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
                 });
@@ -1991,7 +1975,7 @@ function saveState() {
                     csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
                 });
             });
-            downloadCSV('Historial_Total_Pedidos.xlsx', csv);
+            downloadCSV('Historial_Total_Pedidos.xlsx`, csv);
         }
 
         function downloadCSV(filename, csvContent) {
@@ -2008,17 +1992,10 @@ function saveState() {
         }
 
         // --- INIT ON LOAD ---
-     window.onload = async function() {
-    console.log("Iniciando app con datos locales...");
-    render(); // Renderiza inmediatamente lo que hay en localStorage (v6)
-
-    // Intenta actualizar desde la nube en segundo plano de manera segura
-    try {
-        await sincronizarDesdeGoogleSheets();
-    } catch (e) {
-        console.log("Modo local activo.");
-    }
-};
+        window.onload = async function() {
+            render();
+            await sincronizarDesdeGoogleSheets();
+        };
     </script>
 </body>
 </html>
