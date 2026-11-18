@@ -88,10 +88,15 @@ async function syncInventoryToCloud() {
     }
 }
 
-// Función para descargar el inventario y los pedidos frescos al abrir la app en cualquier dispositivo
 async function sincronizarDesdeGoogleSheets() {
     try {
-        const response = await fetch(`${WEB_APP_URL}?action=getData`);
+        // El parámetro &t=... evita que el celular cargue caché viejo
+        const response = await fetch(`${WEB_APP_URL}?action=getData&t=${Date.now()}`, {
+            method: 'GET',
+            redirect: 'follow'
+        });
+        
+        if (!response.ok) throw new Error("Error de red al conectar con Sheets");
         const result = await response.json();
         
         if (result.status === 'success') {
@@ -134,13 +139,14 @@ async function sincronizarDesdeGoogleSheets() {
                 });
 
                 state.inventory = cloudInventory;
+                showToast('Inventario sincronizado con la nube', 'info');
             }
 
             saveState();
             render();
         }
     } catch (err) {
-        console.error("Modo offline o error al descargar de Google Sheets:", err);
+        console.error("Error al descargar de Google Sheets:", err);
     }
 }
         
