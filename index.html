@@ -33,7 +33,7 @@
     <script>
         // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
 
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzKbwecmlAKThRmh0LY7-oAZBQTWNis2GquKlSNg1PZeIxbKQa1xH2LPIqKH4JU7XYg/exec';
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbx7vBlpxwZ3_uF_b7Xez1C1q21188ie1qZqahLb3TSiq_CUeMgFvQjrO5FQNobiBdVo4Q/exec
 
 async function syncOrderToCloud(orderData) {
     try {
@@ -1854,10 +1854,11 @@ async function syncOrderToCloud(orderData) {
             showToast('¡Reporte exportado en formato Excel (.xlsx) con éxito!');
         }
 
-        // --- INIT ON LOAD ---
-        window.onload = function() {
-            render();
-        }
+       // --- INIT ON LOAD ---
+window.onload = function() {
+    sincronizarDesdeGoogleSheets(); // Descarga los datos frescos de la nube al abrir
+    render();
+}
     </script>
 </body>
 </html>
