@@ -95,9 +95,7 @@ async function sincronizarDesdeGoogleSheets() {
         const result = await response.json();
         
         if (result.status === 'success') {
-            // Sincronizar Pedidos
             if (result.orders && result.orders.length > 0) {
-                // Mapear los pedidos de la nube al formato de la app
                 state.orders = result.orders.map(o => ({
                     id: o.id,
                     location: o.location,
@@ -107,15 +105,18 @@ async function sincronizarDesdeGoogleSheets() {
                     time: o.time,
                     status: o.status,
                     items: o.itemsText ? o.itemsText.split(' | ').map(str => {
-                        // Reconstruir el objeto de ítem básico
-                        return { code: str.split(' - ')[0], name: str.split(' - ')[1]?.split(' (Cant:')[0] || '', orderedQty: parseInt(str.split('Cant: ')[1]) || 1, deliveredQty: 0, pendingQty: 0 };
+                        return { 
+                            code: str.split(' - ')[0], 
+                            name: str.split(' - ')[1]?.split(' (Cant:')[0] || '', 
+                            orderedQty: parseInt(str.split('Cant: ')[1]) || 1, 
+                            deliveredQty: 0, 
+                            pendingQty: 0 
+                        };
                     }) : []
                 }));
             }
 
-            // Sincronizar Inventario si la nube tiene datos registrados
             if (result.inventory && result.inventory.length > 0) {
-                // Reiniciar estructura local antes de poblar con la nube
                 let cloudInventory = {
                     ICV: { hospitalarios: [], comercializadora: [] },
                     CIE: { hospitalarios: [], comercializadora: [] }
@@ -126,8 +127,8 @@ async function sincronizarDesdeGoogleSheets() {
                         cloudInventory[i.location][i.section].push({
                             code: i.code,
                             name: i.name,
-                            quantity: i.quantity,
-                            minStock: i.minStock
+                            quantity: Number(i.quantity),
+                            minStock: Number(i.minStock)
                         });
                     }
                 });
@@ -136,7 +137,6 @@ async function sincronizarDesdeGoogleSheets() {
             }
 
             saveState();
-            syncInventoryToCloud();
             render();
         }
     } catch (err) {
@@ -144,46 +144,44 @@ async function sincronizarDesdeGoogleSheets() {
     }
 }
         
-        const STORAGE_KEY = 'icv_cie_inventory_system_v6';
+const STORAGE_KEY = 'icv_cie_inventory_system_v6';
 
-        let defaultState = {
-            currentUser: null, 
-            currentLocation: 'ICV', // 'ICV' or 'CIE'
-            currentSection: 'hospitalarios', // 'hospitalarios' or 'comercializadora'
-            currentTab: 'inventario', // 'inventario' | 'pedido' | 'seguimiento' | 'reportes'
-            users: [
-                { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' }
+let defaultState = {
+    currentUser: null, 
+    currentLocation: 'ICV',
+    currentSection: 'hospitalarios',
+    currentTab: 'inventario',
+    users: [
+        { name: 'Lindsay Velasco', username: 'lindsayvelasco', document: '27984352', password: 'admin', role: 'admin' }
+    ],
+    inventory: {
+        ICV: {
+            hospitalarios: [
+                { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
+                { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
+                { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
             ],
-            inventory: {
-                ICV: {
-                    hospitalarios: [
-                        { code: 'HOS-001', name: 'Sábanas Planas Blancas', quantity: 200, minStock: 50 },
-                        { code: 'HOS-002', name: 'Batas Quirúrgicas Estériles', quantity: 150, minStock: 30 },
-                        { code: 'HOS-003', name: 'Guantes de Látex Talla M (Caja)', quantity: 300, minStock: 100 }
-                    ],
-                    comercializadora: [
-                        { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
-                        { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
-                    ]
-                },
-                CIE: {
-                    hospitalarios: [
-                        { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
-                        { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
-                    ],
-                    comercializadora: [
-                        { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
-                        { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
-                    ]
-                }
-            },
-            orders: [], 
-            notifications: [], 
-            cart: []
-        };
+            comercializadora: [
+                { code: 'COM-001', name: 'Alcohol Antiséptico 70% (Litro)', quantity: 400, minStock: 80 },
+                { code: 'COM-002', name: 'Tapabocas Triple Capa (Caja x50)', quantity: 500, minStock: 120 }
+            ]
+        },
+        CIE: {
+            hospitalarios: [
+                { code: 'HOS-101', name: 'Camillas Clínicas Hidráulicas', quantity: 15, minStock: 3 },
+                { code: 'HOS-102', name: 'Monitores de Signos Vitales', quantity: 8, minStock: 2 }
+            ],
+            comercializadora: [
+                { code: 'COM-101', name: 'Gel Antibacterial 1000ml', quantity: 250, minStock: 50 },
+                { code: 'COM-102', name: 'Jeringas 10ml con Aguja (Caja x100)', quantity: 180, minStock: 40 }
+            ]
+        }
+    },
+    orders: [], 
+    notifications: [], 
+    cart: []
+};
 
-        let state = loadState();
-        
 // --- CARGAR ESTADO DESDE LOCALSTORAGE ---
 function loadState() {
     try {
@@ -197,12 +195,12 @@ function loadState() {
     return defaultState; 
 }
 
-// Inicializar la variable state una sola vez
+// ÚNICA declaración de state
 let state = loadState();
 
-        function saveState() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        }
+function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
         // --- TOAST NOTIFICATIONS ---
         function showToast(message, type = 'success') {
@@ -750,6 +748,7 @@ let state = loadState();
                 }
                 item.quantity -= consumeQty;
                 saveState();
+                syncInventoryToCloud();
                 closeModal();
                 showToast(`¡Se descontaron ${consumeQty} unidades de ${item.name} por consumo!`);
                 render();
@@ -809,6 +808,7 @@ let state = loadState();
 
             list.push({ code, name, quantity, minStock });
             saveState();
+            syncInventoryToCloud();
             closeModal();
             showToast('¡Insumo agregado con éxito a la base de datos!');
             render();
@@ -923,6 +923,7 @@ let state = loadState();
                     });
 
                     saveState();
+                    syncInventoryToCloud();
                     closeModal();
                     showToast(`¡Carga masiva completada! Se agregaron ${addedCount} nuevos insumos y se actualizaron ${updatedCount}.`);
                     render();
@@ -997,6 +998,7 @@ let state = loadState();
                 item.quantity = quantity;
                 item.minStock = minStock;
                 saveState();
+                syncInventoryToCloud();
                 closeModal();
                 showToast('¡Insumo modificado con éxito!');
                 render();
@@ -1009,6 +1011,7 @@ let state = loadState();
             if (idx !== -1) {
                 list.splice(idx, 1);
                 saveState();
+                syncInventoryToCloud();
                 showToast('Insumo eliminado de la base de datos.', 'info');
                 render();
             }
@@ -1352,6 +1355,7 @@ let state = loadState();
             order.status = allCompleted ? 'Completado' : 'Parcial';
 
             saveState();
+            syncInventoryToCloud();
             closeModal();
             showToast('¡Recepción registrada y stock actualizado con éxito!');
             render();
