@@ -1968,15 +1968,15 @@
             openNotificationDetail('PSEUDO-' + orderId);
         }
 
-        function exportOrdersCSV() {
-            let csv = 'ID Orden,Usuario,Fecha,Hora,Sede,Seccion,Estado,Codigo Insumo,Nombre Insumo,Cantidad Solicitada\n';
-            state.orders.forEach(ord => {
-                ord.items.forEach(i => {
-                    csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
-                });
-            });
-            downloadCSV('Historial_Total_Pedidos.xlsx`, csv);
-        }
+       function exportOrdersCSV() {
+    let csv = 'ID Orden,Usuario,Fecha,Hora,Sede,Seccion,Estado,Codigo Insumo,Nombre Insumo,Cantidad Solicitada\n';
+    state.orders.forEach(ord => {
+        ord.items.forEach(i => {
+            csv += `"${ord.id}","${ord.userName}","${ord.date}","${ord.time}","${ord.location}","${ord.section}","${ord.status}","${i.code}","${i.name}","${i.orderedQty}"\n`;
+        });
+    });
+    downloadCSV('Historial_Total_Pedidos.xlsx', csv); //
+}
 
         function downloadCSV(filename, csvContent) {
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
