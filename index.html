@@ -32,6 +32,26 @@
     <!-- APPLICATION JAVASCRIPT -->
     <script>
         // --- INITIAL STATE & LOCALSTORAGE MANAGEMENT ---
+
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzKbwecmlAKThRmh0LY7-oAZBQTWNis2GquKlSNg1PZeIxbKQa1xH2LPIqKH4JU7XYg/exec';
+
+async function syncOrderToCloud(orderData) {
+    try {
+        await fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'saveOrder',
+                ...orderData
+            })
+        });
+        showToast('¡Pedido sincronizado en la nube (Google Sheets)!', 'success');
+    } catch (err) {
+        console.error("Error al sincronizar con la nube:", err);
+        showToast('Guardado localmente en este dispositivo.', 'info');
+    }
+}
         const STORAGE_KEY = 'icv_cie_inventory_system_v5';
 
         let defaultState = {
@@ -1079,6 +1099,7 @@
 
             state.cart = [];
             saveState();
+            syncOrderToCloud(newOrder);
             showToast('¡Pedido realizado con éxito y notificación enviada al administrador!');
             switchTab('seguimiento');
         }
